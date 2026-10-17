@@ -1,6 +1,6 @@
 # Sheet Music Labeler
 
-Writes the name of every note (C D E♭ … or Do Re Mi …) next to the note in a piano score, so you can read sheet music while you are still learning it. Runs entirely on your own computer.
+Writes the name of every note (C D E♭ … or Do Re Mi …) next to the note in a piano score, so you can read sheet music while you are still learning it.
 
 ## Install (once)
 
