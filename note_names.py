@@ -25,14 +25,37 @@ FONT_PROFILES = {
 
 LETTERS = ["C", "D", "E", "F", "G", "A", "B"]
 SOLFEGE = ["Do", "Re", "Mi", "Fa", "Sol", "La", "Si"]
-ACC_TEXT = {-2: "♭♭", -1: "♭", 0: "", 1: "♯", 2: "♯♯"}
 COLORS = {"red": (0.78, 0.08, 0.12), "blue": (0.05, 0.3, 0.75),
           "green": (0.0, 0.5, 0.25), "black": (0, 0, 0)}
 
 # diatonic step of the bottom staff line, counted from C0 (C0=0, D0=1, ...)
 BOTTOM_LINE = {"treble": 4 * 7 + 2, "bass": 2 * 7 + 4}  # E4, G2
 
-LABEL_FONT = "/usr/share/fonts/truetype/dejavu/DejaVuSansCondensed-Bold.ttf"
+# Fonts with real ♭ and ♯ signs, tried in order (Linux, macOS, Windows).
+FONT_CANDIDATES = [
+    "/usr/share/fonts/truetype/dejavu/DejaVuSansCondensed-Bold.ttf",
+    "/usr/share/fonts/dejavu-sans-fonts/DejaVuSansCondensed-Bold.ttf",
+    "/usr/share/fonts/TTF/DejaVuSansCondensed-Bold.ttf",
+    "/System/Library/Fonts/Supplemental/Arial Unicode.ttf",
+    "/Library/Fonts/Arial Unicode.ttf",
+    "C:/Windows/Fonts/seguisym.ttf",
+]
+
+
+def find_label_font():
+    """First installed font that has ♭ and ♯, or None to fall back to PyMuPDF's built-in Helvetica."""
+    for path in FONT_CANDIDATES:
+        if Path(path).is_file():
+            font = pymupdf.Font(fontfile=path)
+            if font.has_glyph(ord("♭")) and font.has_glyph(ord("♯")):
+                return path
+    return None
+
+
+LABEL_FONT = find_label_font()
+# Helvetica has no ♭/♯, so write them as b and # there
+ACC_TEXT = ({-2: "♭♭", -1: "♭", 0: "", 1: "♯", 2: "♯♯"} if LABEL_FONT
+            else {-2: "bb", -1: "b", 0: "", 1: "#", 2: "##"})
 CHECK_COLOR = (0.9, 0.42, 0.0)  # orange: "not sure, please check"
 NOTEHEAD_W = 6.0 / 20  # notehead width per point of glyph size
 
@@ -159,7 +182,9 @@ def chords(notes):
     groups = []
     for n in sorted(notes, key=lambda n: (n["staff"], n["x"])):
         g = groups[-1] if groups else None
-        if g and g[0]["staff"] == n["staff"] and n["x"] - g[-1]["x"] < 1.25 * n["w"] and n["x"] - g[0]["x"] < 2.2 * n["w"]:
+        same_chord = (g and g[0]["staff"] == n["staff"]
+                      and n["x"] - g[-1]["x"] < 1.25 * n["w"] and n["x"] - g[0]["x"] < 2.2 * n["w"])
+        if same_chord:
             g.append(n)
         else:
             groups.append([n])
@@ -169,7 +194,7 @@ def chords(notes):
 def layout(notes, dots, fontsize, names):
     """Place a label to the right of each chord, one per notehead, without overlaps.
 
-    A note may carry its own "fs" (font size) and an "uncertain" flag (drawn muted).
+    A note may carry its own "fs" (font size) and an "uncertain" flag (drawn orange).
     """
     labels = []
     for chord in chords(notes):
@@ -178,7 +203,8 @@ def layout(notes, dots, fontsize, names):
         right = max(n["x"] + n["w"] for n in chord)
         ys = [n["y"] for n in chord]
         for d in dots:  # augmentation dots sit right of the chord: put the label after them
-            if d["staff"] == chord[0]["staff"] and 0 <= d["x"] - right < 0.8 * w and min(ys) - 0.7 * w < d["y"] < max(ys) + 0.7 * w:
+            if (d["staff"] == chord[0]["staff"] and 0 <= d["x"] - right < 0.8 * w
+                    and min(ys) - 0.7 * w < d["y"] < max(ys) + 0.7 * w):
                 right = max(right, d["x1"])
         x = right + 0.13 * w
         # one label per pitch, top to bottom; spread them so they never overlap
@@ -198,10 +224,18 @@ def layout(notes, dots, fontsize, names):
     return labels
 
 
+def label_fontname(page):
+    """Make the label font available on the page and return the name to draw with."""
+    if LABEL_FONT is None:
+        return "helv"
+    page.insert_font(fontname="lbl", fontfile=LABEL_FONT)
+    return "lbl"
+
+
 def draw_labels(page, labels, rgb):
     """Draw labels with a soft white backdrop so they stay legible over stems and beams."""
-    font = pymupdf.Font(fontfile=LABEL_FONT)
-    page.insert_font(fontname="lbl", fontfile=LABEL_FONT)
+    font = pymupdf.Font(fontfile=LABEL_FONT) if LABEL_FONT else pymupdf.Font("helv")
+    fontname = label_fontname(page)
     shape = page.new_shape()
     for x, y, text, fs, _ in labels:
         w = font.text_length(text, fs)
@@ -209,7 +243,7 @@ def draw_labels(page, labels, rgb):
     shape.finish(fill=(1, 1, 1), color=None, fill_opacity=0.82)
     shape.commit()
     for x, y, text, fs, uncertain in labels:
-        page.insert_text((x, y + fs * 0.36), text, fontname="lbl", fontsize=fs,
+        page.insert_text((x, y + fs * 0.36), text, fontname=fontname, fontsize=fs,
                          color=CHECK_COLOR if uncertain else rgb)
 
 
@@ -226,9 +260,9 @@ def draw_check_marks(page, notes):
 
 def draw_legend(page, count):
     """One line at the top of the first page explaining the orange marks."""
-    page.insert_font(fontname="lbl", fontfile=LABEL_FONT)
+    fontname = label_fontname(page)
     text = f"Orange = not sure, please check ({count} note{'s' if count != 1 else ''})"
-    page.insert_text((page.rect.x0 + 24, page.rect.y0 + 16), text, fontname="lbl", fontsize=7, color=CHECK_COLOR)
+    page.insert_text((page.rect.x0 + 24, page.rect.y0 + 16), text, fontname=fontname, fontsize=7, color=CHECK_COLOR)
 
 
 def annotate(src, dst, style="letters", color="red", fontsize=5.4):

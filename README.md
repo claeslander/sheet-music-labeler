@@ -1,8 +1,10 @@
-# sheet-music-labeler
+# Sheet Music Labeler
 
 Writes the name of every note (C D E♭ … or Do Re Mi …) next to the note in a piano score, so you can read sheet music while you are still learning it. Runs entirely on your own computer.
 
 ## Install (once)
+
+Needs Python 3.11 or newer. Developed and tested on Debian Linux.
 
 ```bash
 python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
@@ -71,9 +73,14 @@ When the two disagree, or only one of them saw a note, the name is drawn in oran
 - The exact reader knows one notation font so far: **Aloisen**. PDFs from MuseScore, Finale, Sibelius, LilyPond or Dorico use other fonts and currently fall back to OMR, until their glyphs are added to `FONT_PROFILES` in `note_names.py`.
 - OMR misses clef changes in the middle of a line. Those notes get marked orange.
 - Accidentals tied across a barline are not carried over (rare).
+- Names use real ♭ and ♯ signs when a font with them is installed (DejaVu Sans on Linux, Arial Unicode on macOS, Segoe UI Symbol on Windows); otherwise they are written as b and #.
 
 ## Files
 
 - `note_names.py`: the exact reader, plus the label layout and drawing shared by both routes
 - `omr_label.py`: the scan route (homr, notehead splitting, accidental detection, the two-reader check)
 - `app.py`, `app.html`: the local web app
+
+## License
+
+MIT, see [LICENSE](LICENSE). The libraries it builds on, [PyMuPDF](https://github.com/pymupdf/PyMuPDF) and [homr](https://github.com/liebharc/homr), are licensed under the AGPL-3.0, which applies to them when you redistribute or host the app together with them.
