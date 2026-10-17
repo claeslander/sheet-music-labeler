@@ -1,0 +1,2 @@
+pymupdf==1.28.2
+homr==0.7.0  # only for scanned scores (omr_label.py)

@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Note Names</title>
+<style>
+  :root {
+    --bg: #f6f4ef; --panel: #ffffff; --ink: #1d1b18; --muted: #6f6a61; --line: #e2ddd3;
+    --accent: #b3261e; --accent-ink: #ffffff; --drop: #fbfaf7;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #161513; --panel: #201f1c; --ink: #ece8e1; --muted: #a39d92; --line: #36332e;
+      --accent: #e5554b; --accent-ink: #1a0f0e; --drop: #1b1a17;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: var(--bg); color: var(--ink);
+    font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    display: grid; grid-template-columns: 320px 1fr; gap: 0;
+  }
+  aside {
+    background: var(--panel); border-right: 1px solid var(--line);
+    padding: 28px 24px; display: flex; flex-direction: column; gap: 26px; overflow-y: auto;
+  }
+  h1 { font: 600 22px/1.2 Georgia, "Times New Roman", serif; margin: 0; letter-spacing: -0.01em; }
+  h1 span { color: var(--accent); }
+  .sub { color: var(--muted); margin: 6px 0 0; font-size: 13.5px; }
+  #drop {
+    border: 1.5px dashed var(--line); border-radius: 12px; background: var(--drop);
+    padding: 26px 16px; text-align: center; cursor: pointer; transition: border-color .15s, background .15s;
+  }
+  #drop:hover, #drop.over { border-color: var(--accent); }
+  #drop svg { width: 34px; height: 34px; color: var(--muted); }
+  #drop .big { font-weight: 600; margin-top: 8px; }
+  #drop .small { color: var(--muted); font-size: 13px; }
+  #drop .file { margin-top: 10px; font-size: 13px; color: var(--ink); word-break: break-all; }
+  label.h { display: block; font-size: 12px; font-weight: 600; text-transform: uppercase;
+            letter-spacing: .06em; color: var(--muted); margin-bottom: 8px; }
+  .seg { display: grid; grid-template-columns: 1fr 1fr; border: 1px solid var(--line); border-radius: 9px; overflow: hidden; }
+  .seg button { border: 0; background: transparent; color: var(--ink); padding: 8px 6px; font: inherit; cursor: pointer; }
+  .seg button + button { border-left: 1px solid var(--line); }
+  .seg button.on { background: var(--ink); color: var(--panel); }
+  .seg small { display: block; font-size: 11.5px; opacity: .7; }
+  .swatches { display: flex; gap: 10px; }
+  .swatches button {
+    width: 30px; height: 30px; border-radius: 50%; border: 2px solid var(--panel);
+    outline: 1.5px solid var(--line); cursor: pointer; padding: 0;
+  }
+  .swatches button.on { outline: 2px solid var(--ink); }
+  input[type=range] { width: 100%; accent-color: var(--accent); }
+  .row { display: flex; justify-content: space-between; align-items: baseline; }
+  .row output { font-variant-numeric: tabular-nums; color: var(--muted); font-size: 13px; }
+  #download {
+    display: block; text-align: center; text-decoration: none; padding: 11px; border-radius: 10px;
+    background: var(--accent); color: var(--accent-ink); font-weight: 600;
+  }
+  #download[aria-disabled=true] { opacity: .35; pointer-events: none; }
+  #status { font-size: 13.5px; color: var(--muted); min-height: 2.6em; }
+  #status.err { color: var(--accent); }
+  main { position: relative; min-width: 0; }
+  iframe { width: 100%; height: 100%; border: 0; display: none; background: #fff; }
+  .empty {
+    position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted); text-align: center; padding: 24px;
+  }
+  .empty .staff { font: 64px/1 Georgia, serif; opacity: .25; }
+  .spinner { width: 18px; height: 18px; border: 2px solid var(--line); border-top-color: var(--accent);
+             border-radius: 50%; display: inline-block; vertical-align: -4px; margin-right: 8px; animation: spin .8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @media (max-width: 760px) {
+    body { grid-template-columns: 1fr; grid-template-rows: auto 70vh; }
+    aside { border-right: 0; border-bottom: 1px solid var(--line); padding: 20px 16px; }
+  }
+</style>
+</head>
+<body>
+<aside>
+  <div>
+    <h1>Note <span>Names</span></h1>
+    <p class="sub">Writes the name of every note into your sheet music. Everything stays on this computer.</p>
+  </div>
+
+  <div id="drop" tabindex="0">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 16V4M7 9l5-5 5 5"/><path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/>
+    </svg>
+    <div class="big">Drop a score PDF here</div>
+    <div class="small">or click to choose a file (scans and photos work too)</div>
+    <div class="file" id="fname"></div>
+    <input type="file" id="file" accept="application/pdf,image/png,image/jpeg" hidden>
+  </div>
+
+  <div>
+    <label class="h">Names</label>
+    <div class="seg" id="style">
+      <button data-v="letters" class="on">C D E<small>letters</small></button>
+      <button data-v="solfege">Do Re Mi<small>solfège</small></button>
+    </div>
+  </div>
+
+  <div>
+    <label class="h">Colour</label>
+    <div class="swatches" id="color">
+      <button data-v="red" class="on" style="background:#c7141f" aria-label="red"></button>
+      <button data-v="blue" style="background:#0d4dbf" aria-label="blue"></button>
+      <button data-v="green" style="background:#008040" aria-label="green"></button>
+      <button data-v="black" style="background:#111" aria-label="black"></button>
+    </div>
+  </div>
+
+  <div>
+    <div class="row"><label class="h" for="size">Label size</label><output id="sizeOut">5.4 pt</output></div>
+    <input type="range" id="size" min="3.5" max="7" step="0.1" value="5.4">
+  </div>
+
+  <div id="status"></div>
+  <a id="download" aria-disabled="true" download>Download labelled PDF</a>
+</aside>
+
+<main>
+  <div class="empty" id="empty"><div><div class="staff">𝄞 ♩ ♪</div><p>Your labelled score will appear here.</p></div></div>
+  <iframe id="view" title="Labelled score"></iframe>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const opts = { style: "letters", color: "red", size: "5.4" };
+let pdf = null, name = "", url = null, busy = 0;
+
+function pick(groupId, key) {
+  $(groupId).addEventListener("click", (e) => {
+    const b = e.target.closest("button"); if (!b) return;
+    [...$(groupId).children].forEach((c) => c.classList.toggle("on", c === b));
+    opts[key] = b.dataset.v; run();
+  });
+}
+pick("style", "style"); pick("color", "color");
+$("size").addEventListener("input", (e) => { $("sizeOut").textContent = e.target.value + " pt"; });
+$("size").addEventListener("change", (e) => { opts.size = e.target.value; run(); });
+
+const drop = $("drop");
+drop.addEventListener("click", () => $("file").click());
+drop.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") $("file").click(); });
+$("file").addEventListener("change", (e) => load(e.target.files[0]));
+["dragenter", "dragover"].forEach((t) => drop.addEventListener(t, (e) => { e.preventDefault(); drop.classList.add("over"); }));
+["dragleave", "drop"].forEach((t) => drop.addEventListener(t, (e) => { e.preventDefault(); drop.classList.remove("over"); }));
+drop.addEventListener("drop", (e) => load(e.dataTransfer.files[0]));
+// dropping anywhere else should not navigate away
+window.addEventListener("dragover", (e) => e.preventDefault());
+window.addEventListener("drop", (e) => { e.preventDefault(); if (e.dataTransfer.files[0]) load(e.dataTransfer.files[0]); });
+
+function status(html, err) { $("status").innerHTML = html; $("status").classList.toggle("err", !!err); }
+
+let mode = "exact"; // switches to "omr" once a file turns out to be a scan
+
+async function load(file) {
+  if (!file) return;
+  pdf = await file.arrayBuffer(); name = file.name; mode = "exact";
+  $("fname").textContent = name;
+  run();
+}
+
+async function run() {
+  if (!pdf) return;
+  const ticket = ++busy;
+  status(mode === "omr"
+    ? '<span class="spinner"></span>This is a scanned score: reading it with the local OMR model (about 25 s per page)…'
+    : '<span class="spinner"></span>Reading notes…');
+  const ext = (name.match(/\.(\w+)$/) || [, "pdf"])[1].toLowerCase();
+  const q = new URLSearchParams({ ...opts, mode, ext });
+  let res;
+  try {
+    res = await fetch("/annotate?" + q, { method: "POST", body: pdf, headers: { "Content-Type": "application/octet-stream" } });
+  } catch (e) {
+    return status("The app server is not running. Start it with <code>python app.py</code>.", true);
+  }
+  if (ticket !== busy) return; // a newer request superseded this one
+  if (!res.ok) {
+    const j = await res.json().catch(() => ({}));
+    if (j.scanned) { mode = "omr"; return run(); }
+    $("download").setAttribute("aria-disabled", "true");
+    return status("Could not label this file: " + (j.error || res.statusText), true);
+  }
+  const blob = await res.blob();
+  if (url) URL.revokeObjectURL(url);
+  url = URL.createObjectURL(blob);
+  $("view").src = url; $("view").style.display = "block"; $("empty").style.display = "none";
+  const dl = $("download");
+  dl.href = url; dl.download = name.replace(/\.pdf$/i, "") + "_notenamen.pdf"; dl.setAttribute("aria-disabled", "false");
+  const n = Number(res.headers.get("X-Notes")).toLocaleString();
+  if (res.headers.get("X-Mode") === "omr") {
+    const guesses = Number(res.headers.get("X-Notes")) - Number(res.headers.get("X-Confirmed"));
+    status(`${n} notes labelled from the scan. ` + (guesses
+      ? `<b style="color:#e06c00">${guesses} marked orange</b>: not sure, please check those.`
+      : "No uncertain notes.") + " A few notes may be missing entirely.");
+  } else {
+    status(`${n} notes labelled, read exactly from the PDF.`);
+  }
+}
+</script>
+</body>
+</html>
