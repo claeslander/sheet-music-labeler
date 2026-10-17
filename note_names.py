@@ -4,7 +4,7 @@ Works on PDFs exported from notation software, where every musical symbol is a f
 glyph with an exact position, so the result is exact rather than a guess. Scanned
 scores (images) need OMR instead, see omr_label.py.
 
-Usage: python notenamen.py input.pdf [output.pdf] [--style letters|solfege] [--color red|blue|green|black]
+Usage: python note_names.py input.pdf [output.pdf] [--style letters|solfege] [--color red|blue|green|black]
 """
 import argparse
 import sys
@@ -259,7 +259,7 @@ def main():
     ap.add_argument("--color", choices=list(COLORS), default="red")
     ap.add_argument("--size", type=float, default=5.4, help="label font size in points")
     a = ap.parse_args()
-    out = a.output or a.input.with_name(a.input.stem + "_notenamen.pdf")
+    out = a.output or a.input.with_name(a.input.stem + "_note_names.pdf")
     try:
         n = annotate(a.input, out, a.style, a.color, a.size)
     except UnsupportedPDF as e:

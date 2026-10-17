@@ -189,7 +189,7 @@ async function run() {
   url = URL.createObjectURL(blob);
   $("view").src = url; $("view").style.display = "block"; $("empty").style.display = "none";
   const dl = $("download");
-  dl.href = url; dl.download = name.replace(/\.pdf$/i, "") + "_notenamen.pdf"; dl.setAttribute("aria-disabled", "false");
+  dl.href = url; dl.download = name.replace(/\.pdf$/i, "") + "_note_names.pdf"; dl.setAttribute("aria-disabled", "false");
   const n = Number(res.headers.get("X-Notes")).toLocaleString();
   if (res.headers.get("X-Mode") === "omr") {
     const guesses = Number(res.headers.get("X-Notes")) - Number(res.headers.get("X-Confirmed"));

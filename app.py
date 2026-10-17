@@ -9,7 +9,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-import notenamen
+import note_names
 
 import importlib.util
 
@@ -47,9 +47,9 @@ class Handler(BaseHTTPRequestHandler):
                     n, ok = omr_label.annotate(src, dst, *args, progress=lambda s: None)
                     headers = {"X-Notes": str(n), "X-Confirmed": str(ok), "X-Mode": "omr"}
                 else:
-                    n = notenamen.annotate(src, dst, *args)
+                    n = note_names.annotate(src, dst, *args)
                     headers = {"X-Notes": str(n), "X-Mode": "exact"}
-            except notenamen.UnsupportedPDF as e:
+            except note_names.UnsupportedPDF as e:
                 scanned = q.get("mode") != "omr" and omr_label is not None
                 return self.error(str(e), scanned=scanned)
             except Exception as e:  # not a PDF, corrupt file, ...

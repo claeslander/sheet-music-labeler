@@ -31,24 +31,24 @@ The first time you label a scan, the OMR model downloads its weights (about 130 
    - **Colour**: red, blue, green or black
    - **Label size**: the size of the names
 
-5. Click **Download labelled PDF**. The file gets `_notenamen` added to its name.
+5. Click **Download labelled PDF**. The file gets `_note_names` added to its name.
 
 For a scan, the status on the left (and the top of page 1 in the PDF) says how many notes are marked orange: check those, the app is not sure about them (see below).
 
 ## Use the command line
 
 ```bash
-.venv/bin/python notenamen.py score.pdf                 # PDF from notation software
+.venv/bin/python note_names.py score.pdf                 # PDF from notation software
 .venv/bin/python omr_label.py scan.pdf                  # scan or photo (PDF, PNG, JPG)
 ```
 
-The result is saved next to the input as `score_notenamen.pdf` (or `scan_notenamen_omr.pdf`); pass a second file name to choose another. Options for both: `--style solfege`, `--color red|blue|green|black`, `--size 6` (label size in points).
+The result is saved next to the input as `score_note_names.pdf` (or `scan_note_names_omr.pdf`); pass a second file name to choose another. Options for both: `--style solfege`, `--color red|blue|green|black`, `--size 6` (label size in points).
 
 ## How it reads a score
 
 Note names follow the notation exactly as written: the letter comes from the line or space the note sits on, the ♯/♭/♮ from the key signature and from accidentals earlier in the same bar. A note is never respelled (a B♭ stays B♭, it does not become A♯).
 
-| | `notenamen.py`: exact | `omr_label.py`: scans and photos |
+| | `note_names.py`: exact | `omr_label.py`: scans and photos |
 |---|---|---|
 | Works on | PDFs exported from notation software | any image of a score |
 | How | reads the notation font's glyphs and their exact positions from the PDF | the local [homr](https://github.com/liebharc/homr) OMR model, checked by a second, independent reading (see below) |
@@ -68,12 +68,12 @@ When the two disagree, or only one of them saw a note, the name is drawn in oran
 
 ## Limits
 
-- The exact reader knows one notation font so far: **Aloisen**. PDFs from MuseScore, Finale, Sibelius, LilyPond or Dorico use other fonts and currently fall back to OMR, until their glyphs are added to `FONT_PROFILES` in `notenamen.py`.
+- The exact reader knows one notation font so far: **Aloisen**. PDFs from MuseScore, Finale, Sibelius, LilyPond or Dorico use other fonts and currently fall back to OMR, until their glyphs are added to `FONT_PROFILES` in `note_names.py`.
 - OMR misses clef changes in the middle of a line. Those notes get marked orange.
 - Accidentals tied across a barline are not carried over (rare).
 
 ## Files
 
-- `notenamen.py`: the exact reader, plus the label layout and drawing shared by both routes
+- `note_names.py`: the exact reader, plus the label layout and drawing shared by both routes
 - `omr_label.py`: the scan route (homr, notehead splitting, accidental detection, the two-reader check)
 - `app.py`, `app.html`: the local web app

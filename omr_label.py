@@ -22,7 +22,7 @@ import cv2
 import numpy as np
 import pymupdf
 
-import notenamen as nn
+import note_names as nn
 
 os.environ.setdefault("ORT_LOGGING_LEVEL", "3")
 
@@ -425,7 +425,7 @@ def key_signatures(staff, loose, first_note_x):
 
 
 def label_system(staff, tokens, centres=None, accidentals=(), key=0):
-    """Return note dicts (image coordinates) ready for notenamen.layout.
+    """Return note dicts (image coordinates) ready for note_names.layout.
 
     Every note is read twice: by homr's transformer (pitch incl. accidental) and by
     geometry (notehead position + clef, and the accidentals we find ourselves + key
@@ -552,7 +552,7 @@ def main():
     ap.add_argument("--color", choices=list(nn.COLORS), default="red")
     ap.add_argument("--size", type=float, default=5.4, help="label size relative to a 5 pt staff space")
     a = ap.parse_args()
-    out = a.output or a.input.with_name(a.input.stem + "_notenamen_omr.pdf")
+    out = a.output or a.input.with_name(a.input.stem + "_note_names_omr.pdf")
     try:
         total, ok = annotate(a.input, out, a.style, a.color, a.size, progress=lambda s: print(s, file=sys.stderr))
     except nn.UnsupportedPDF as e:
