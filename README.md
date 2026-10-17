@@ -2,19 +2,47 @@
 
 Writes the name of every note (C D E♭ … or Do Re Mi …) next to the note in a piano score, so you can read sheet music while you are still learning it. Runs entirely on your own computer.
 
-## Run it
+## Install (once)
 
 ```bash
-python3 -m venv .venv && .venv/bin/pip install -r requirements.txt   # once
-.venv/bin/python app.py      # opens http://localhost:8765; drop in a PDF, scan or photo
+python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
 ```
 
-Or from the command line:
+The first time you label a scan, the OMR model downloads its weights (about 130 MB).
+
+## Use the app
+
+1. Start it from the project folder:
+
+   ```bash
+   .venv/bin/python app.py
+   ```
+
+   Your browser opens http://localhost:8765 (open it yourself if it doesn't). Keep the terminal open while you use the app; Ctrl+C stops it.
+
+2. Add a score: drag a PDF, scan or photo (PDF, PNG or JPG) onto the box on the left, or click the box and pick a file.
+
+3. Wait for the result. It appears on the right:
+   - a PDF exported from notation software takes a few seconds;
+   - a scan or photo is detected automatically and read by the OMR model, which takes about 10-25 seconds per page.
+
+4. Adjust it if you like. The score is redrawn straight away (scans are not read again):
+   - **Names**: letters (C D E) or solfège (Do Re Mi)
+   - **Colour**: red, blue, green or black
+   - **Label size**: the size of the names
+
+5. Click **Download labelled PDF**. The file gets `_notenamen` added to its name.
+
+For a scan, the status on the left (and the top of page 1 in the PDF) says how many notes are marked orange: check those, the app is not sure about them (see below).
+
+## Use the command line
 
 ```bash
-.venv/bin/python notenamen.py score.pdf [out.pdf] [--style solfege] [--color blue] [--size 6]
-.venv/bin/python omr_label.py scan.pdf|photo.jpg [out.pdf]
+.venv/bin/python notenamen.py score.pdf                 # PDF from notation software
+.venv/bin/python omr_label.py scan.pdf                  # scan or photo (PDF, PNG, JPG)
 ```
+
+The result is saved next to the input as `score_notenamen.pdf` (or `scan_notenamen_omr.pdf`); pass a second file name to choose another. Options for both: `--style solfege`, `--color red|blue|green|black`, `--size 6` (label size in points).
 
 ## How it reads a score
 
