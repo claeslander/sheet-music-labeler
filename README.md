@@ -70,7 +70,7 @@ When the two disagree, or only one of them saw a note, the name is drawn in oran
 
 ## Limits
 
-- The exact reader knows one notation font so far: **Aloisen**. PDFs from MuseScore, Finale, Sibelius, LilyPond or Dorico use other fonts and currently fall back to OMR, until their glyphs are added to `FONT_PROFILES` in `note_names.py`.
+- The exact reader knows two notation fonts so far: **Aloisen** and **Leland** (MuseScore 4's default). PDFs from Finale, Sibelius, LilyPond, Dorico or MuseScore with another font currently fall back to OMR, until their glyphs are added to `FONT_PROFILES` in `note_names.py`.
 - OMR misses clef changes in the middle of a line. Those notes get marked orange.
 - Accidentals tied across a barline are not carried over (rare).
 - Names use real ♭ and ♯ signs when a font with them is installed (DejaVu Sans on Linux, Arial Unicode on macOS, Segoe UI Symbol on Windows); otherwise they are written as b and #.

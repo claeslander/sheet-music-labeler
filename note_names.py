@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pymupdf
 
-# Glyph meanings per music font. Only Aloisen (the font in rachman_op3_1.pdf) is mapped so far.
+# Glyph meanings per music font: Aloisen (the font in rachman_op3_1.pdf) and Leland.
 FONT_PROFILES = {
     "Aloisen": {
         "noteheads": set("t|AYZI"),  # filled, half, whole, flagged eighths/sixteenths
@@ -20,6 +20,14 @@ FONT_PROFILES = {
         "treble": "Ä",
         "bass": "Å",
         "dot": "«",
+    },
+    # MuseScore 4's default font; SMuFL code points
+    "Leland": {
+        "noteheads": set(""),  # black, half, whole, double whole
+        "accidentals": {"": -1, "": +1, "": 0, "": -2, "": +2},
+        "treble": "",
+        "bass": "",
+        "dot": "",
     },
 }
 
@@ -64,10 +72,23 @@ class UnsupportedPDF(Exception):
     pass
 
 
+def staff_segments(page):
+    """Horizontal line segments that may be (part of) a staff line, as (y, length, stroke width).
+
+    Some programs draw each staff line in one piece, others (MuseScore) one piece per bar;
+    short ones are ledger lines.
+    """
+    return [(round(it[1].y, 1), abs(it[1].x - it[2].x), d.get("width") or 0)
+            for d in page.get_drawings() for it in d["items"]
+            if it[0] == "l" and abs(it[1].y - it[2].y) < 0.1 and abs(it[1].x - it[2].x) > 25]
+
+
 def find_staves(page):
     """Staves as dicts with the y of the top/bottom line and the line spacing."""
-    ys = sorted({round(it[1].y, 1) for d in page.get_drawings() for it in d["items"]
-                 if it[0] == "l" and abs(it[1].y - it[2].y) < 0.1 and abs(it[1].x - it[2].x) > 200})
+    length = {}
+    for y, n, _ in staff_segments(page):
+        length[y] = length.get(y, 0) + n
+    ys = sorted(y for y, n in length.items() if n > 200)
     staves, group = [], []
     for y in ys:
         if group and y - group[-1] > 8:
@@ -78,10 +99,23 @@ def find_staves(page):
     return [{"top": g[0], "bottom": g[-1], "sp": (g[-1] - g[0]) / 4} for g in staves if len(g) == 5]
 
 
-def find_barlines(page):
-    """Barlines as (x, y_top, y_bottom)."""
-    return [(it[1].x0, it[1].y0, it[1].y1) for d in page.get_drawings() for it in d["items"]
-            if it[0] == "re" and it[1].width < 3 and it[1].height > 15]
+def find_barlines(page, staves):
+    """Barlines as (x, y_top, y_bottom): thin filled rectangles, or vertical strokes thicker
+    than the staff lines that start and end on a staff's outer lines (unlike stems)."""
+    widths = sorted(w for _, _, w in staff_segments(page))
+    staff_w = widths[len(widths) // 2] if widths else 0
+    edges = [y for st in staves for y in (st["top"], st["bottom"])]
+    on_edge = lambda y: any(abs(y - e) < 1 for e in edges)
+    out = []
+    for d in page.get_drawings():
+        for it in d["items"]:
+            if it[0] == "re" and it[1].width < 3 and it[1].height > 15:
+                out.append((it[1].x0, it[1].y0, it[1].y1))
+            elif (it[0] == "l" and abs(it[1].x - it[2].x) < 0.1 and abs(it[1].y - it[2].y) > 15
+                  and staff_w and (d.get("width") or 0) > 1.3 * staff_w
+                  and on_edge(it[1].y) and on_edge(it[2].y)):
+                out.append((it[1].x, min(it[1].y, it[2].y), max(it[1].y, it[2].y)))
+    return out
 
 
 def music_glyphs(page):
@@ -113,7 +147,7 @@ def analyse_page(page):
     glyphs, prof = music_glyphs(page)
     if prof is None:
         return [], []
-    bars = find_barlines(page)
+    bars = find_barlines(page, staves)
     clefs = {prof["treble"]: "treble", prof["bass"]: "bass"}
     accs = prof["accidentals"]
 
