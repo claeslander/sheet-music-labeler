@@ -8,28 +8,64 @@ Writes the name of every note (C D E♭ … or Do Re Mi …) next to the note in
 
 ## Install (once)
 
-Needs Python 3.11 or newer. Developed and tested on Debian Linux.
+**You need:** Python 3.11 or newer (check with `python3 --version`), git, an internet connection for the install, and about 1 GB of free disk space. Developed and tested on Debian Linux; the Windows and macOS commands below should work but have not been tested.
+
+### 1. Download the code
 
 ```bash
-python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
+git clone https://github.com/claeslander/sheet-music-labeler.git
+cd sheet-music-labeler
 ```
 
-The first time you label a scan, the OMR model downloads its weights (about 130 MB).
+### 2. Install the Python packages
 
-**Optional, for scans:** install [Audiveris](https://github.com/Audiveris/audiveris) as well. It checks the scan as a third reader, which removes names drawn on things that are not notes (fingerings, hairpins, ottava lines) and about a third of the orange marks. On Linux the easiest way is Flathub:
+The packages go into a `.venv` folder inside the project, so nothing is installed system-wide. To remove everything later, delete the project folder.
+
+Linux and macOS:
 
 ```bash
-flatpak install flathub org.audiveris.audiveris
+python3 -m venv .venv
+.venv/bin/pip install -r requirements.txt
 ```
 
-On Windows or macOS, install it from its [releases page](https://github.com/Audiveris/audiveris/releases) and make sure the `audiveris` command works, or set the `AUDIVERIS` environment variable to its path. Without Audiveris everything works as before.
+Windows (PowerShell):
+
+```powershell
+py -m venv .venv
+.venv\Scripts\pip install -r requirements.txt
+```
+
+This downloads about 600 MB, mostly the OMR model and image libraries, and takes a few minutes. On Debian or Ubuntu, if the first command says `ensurepip is not available`, run `sudo apt install python3-venv` and try again.
+
+### 3. Check that it works
+
+```bash
+.venv/bin/python app.py          # Windows: .venv\Scripts\python app.py
+```
+
+Your browser should open the app at http://localhost:8765. Press Ctrl+C in the terminal to stop it. The first time you label a scan, the OMR model downloads its weights (about 130 MB), so that first scan takes a little longer.
+
+### 4. Optional: Audiveris, for better results on scans
+
+[Audiveris](https://github.com/Audiveris/audiveris) is a separate OMR program (about 300 MB). When it is installed, the app uses it as a third reader of every scan: it removes names drawn on things that are not notes (fingerings, hairpins, ottava lines) and about a third of the orange marks. Scans take about twice as long. Without Audiveris everything else works the same.
+
+On Linux, install it from Flathub:
+
+```bash
+flatpak remote-add --if-not-exists --user flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+flatpak install --user flathub org.audiveris.audiveris
+```
+
+On Windows or macOS, install it from its [releases page](https://github.com/Audiveris/audiveris/releases). The app looks for an `audiveris` command; if it can't find one, set the `AUDIVERIS` environment variable to the full path of the Audiveris program.
+
+You can tell it is being used when the terminal shows `checking with Audiveris…` after the pages of a scan have been read.
 
 ## Use the app
 
 1. Start it from the project folder:
 
    ```bash
-   .venv/bin/python app.py
+   .venv/bin/python app.py          # Windows: .venv\Scripts\python app.py
    ```
 
    Your browser opens http://localhost:8765 (open it yourself if it doesn't). Keep the terminal open while you use the app; Ctrl+C stops it.
@@ -56,7 +92,7 @@ For a scan, the status on the left (and the top of page 1 in the PDF) says how m
 .venv/bin/python omr_label.py scan.pdf                  # scan or photo (PDF, PNG, JPG)
 ```
 
-The result is saved next to the input as `score_note_names.pdf` (or `scan_note_names_omr.pdf`); pass a second file name to choose another. Options for both: `--style solfege`, `--color red|blue|green|black`, `--size 6` (label size in points).
+On Windows, use `.venv\Scripts\python` instead of `.venv/bin/python`. The result is saved next to the input as `score_note_names.pdf` (or `scan_note_names_omr.pdf`); pass a second file name to choose another. Options for both: `--style solfege`, `--color red|blue|green|black`, `--size 6` (label size in points).
 
 ## How it reads a score
 
