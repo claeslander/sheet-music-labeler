@@ -8,48 +8,61 @@ Writes the name of every note (C D E♭ … or Do Re Mi …) next to the note in
 
 ## Install (once)
 
-**You need:** Python 3.11 or newer (check with `python3 --version`), git, an internet connection for the install, and about 1 GB of free disk space. Developed and tested on Debian Linux; the Windows and macOS commands below should work but have not been tested.
-
-### 1. Download the code
+First download the code (you need [git](https://git-scm.com/downloads)):
 
 ```bash
 git clone https://github.com/claeslander/sheet-music-labeler.git
 cd sheet-music-labeler
 ```
 
-### 2. Install the Python packages
+Then choose one of two ways:
 
-The packages go into a `.venv` folder inside the project, so nothing is installed system-wide. To remove everything later, delete the project folder.
+- **A. The installer, for Linux:** one command installs everything and tests it. Recommended on Linux.
+- **B. Manual installation, for Linux, macOS and Windows:** a few commands you run yourself.
+
+### A. The installer (Linux only)
+
+```bash
+./install.sh
+```
+
+It takes a few minutes and needs about 1 GB of disk space in the project folder, plus up to 2 GB in your home folder for Audiveris. It runs as your normal user and does this:
+
+1. installs [uv](https://docs.astral.sh/uv/) and Python 3.13 **inside the project folder** (`.tools/`), so it works whatever Python your distribution has;
+2. installs the Python packages at the exact versions in `requirements.lock` into `.venv/`;
+3. downloads the OMR model (about 130 MB);
+4. installs [Audiveris](https://github.com/Audiveris/audiveris) from Flathub, for your user only (see [Orange = please check](#orange--please-check) for what it adds). If Flatpak itself is missing, it asks before installing it with your distribution's package manager (`apt`, `dnf`, `pacman` or `zypper`); that is the only step that uses `sudo`;
+5. tests the result: the app reads a small test score like a scan and every note name is compared with the right one. The installer only says it worked when this test passes.
+
+Options: `./install.sh --yes` doesn't ask anything, `./install.sh --no-audiveris` skips Audiveris. Running it again is safe: finished steps are skipped and broken ones are redone. If something fails, the reason is shown and the full log is in `.tools/install.log`.
+
+Tested on Debian 12 and 13, Ubuntu 22.04 and 24.04, Fedora 44, Arch Linux and openSUSE Tumbleweed (x86_64). Audiveris was tested on Debian 13 only; on the others it was skipped, because Flatpak does not run inside the test containers. The installer needs a glibc-based distribution (not Alpine) and an x86_64 processor (aarch64 should work but is untested).
+
+To uninstall, delete the project folder, and remove Audiveris with `flatpak uninstall --user org.audiveris.audiveris`.
+
+### B. Manual installation (Linux, macOS, Windows)
+
+**You need** Python 3.11 to 3.15 (check with `python3 --version`) and about 1 GB of disk space. The Windows and macOS commands should work but have not been tested.
+
+**1. Install the Python packages.** They go into a `.venv` folder inside the project, so nothing is installed system-wide.
 
 Linux and macOS:
 
 ```bash
 python3 -m venv .venv
-.venv/bin/pip install -r requirements.txt
+.venv/bin/pip install -r requirements.lock
 ```
 
 Windows (PowerShell):
 
 ```powershell
 py -m venv .venv
-.venv\Scripts\pip install -r requirements.txt
+.venv\Scripts\pip install -r requirements.lock
 ```
 
-This downloads about 600 MB, mostly the OMR model and image libraries, and takes a few minutes. On Debian or Ubuntu, if the first command says `ensurepip is not available`, run `sudo apt install python3-venv` and try again.
+This downloads about 600 MB and takes a few minutes. `requirements.lock` holds the exact versions that were tested together; `requirements.txt` lists only the direct dependencies, if you'd rather get the newest versions. On Debian or Ubuntu, if the first command says `ensurepip is not available`, run `sudo apt install python3-venv` and try again.
 
-### 3. Check that it works
-
-```bash
-.venv/bin/python app.py          # Windows: .venv\Scripts\python app.py
-```
-
-Your browser should open the app at http://localhost:8765. Press Ctrl+C in the terminal to stop it. The first time you label a scan, the OMR model downloads its weights (about 130 MB), so that first scan takes a little longer.
-
-### 4. Optional: Audiveris, for better results on scans
-
-[Audiveris](https://github.com/Audiveris/audiveris) is a separate OMR program (about 300 MB). When it is installed, the app uses it as a third reader of every scan: it removes names drawn on things that are not notes (fingerings, hairpins, ottava lines) and about a third of the orange marks. Scans take about twice as long. Without Audiveris everything else works the same.
-
-On Linux, install it from Flathub:
+**2. Optional: install Audiveris**, for better results on scans (about 300 MB; scans take about twice as long). On Linux:
 
 ```bash
 flatpak remote-add --if-not-exists --user flathub https://dl.flathub.org/repo/flathub.flatpakrepo
@@ -58,7 +71,13 @@ flatpak install --user flathub org.audiveris.audiveris
 
 On Windows or macOS, install it from its [releases page](https://github.com/Audiveris/audiveris/releases). The app looks for an `audiveris` command; if it can't find one, set the `AUDIVERIS` environment variable to the full path of the Audiveris program.
 
-You can tell it is being used when the terminal shows `checking with Audiveris…` after the pages of a scan have been read.
+**3. Check that it works:**
+
+```bash
+.venv/bin/python tests/selftest.py          # Windows: .venv\Scripts\python tests\selftest.py
+```
+
+It reads a small test score like a scan (downloading the OMR model the first time) and prints `OK` when every note is named correctly, and whether Audiveris was used.
 
 ## Use the app
 
@@ -132,6 +151,9 @@ On the test piece 7% of the notes get marked (10% without Audiveris). Of the nam
 - `omr_label.py`: the scan route (homr, notehead splitting, accidental detection, the check between the readers)
 - `audiveris.py`: runs Audiveris and names the noteheads it finds
 - `app.py`, `app.html`: the local web app
+- `install.sh`: the Linux installer
+- `requirements.txt`, `requirements.lock`: the direct dependencies, and the exact tested versions of everything
+- `tests/selftest.py`, `tests/fur_elise.png`: the end-to-end check the installer runs
 
 ## License
 
