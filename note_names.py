@@ -281,17 +281,6 @@ def draw_labels(page, labels, rgb):
                          color=CHECK_COLOR if uncertain else rgb)
 
 
-def draw_check_marks(page, notes):
-    """An orange ring around every notehead whose name we are not sure about."""
-    shape = page.new_shape()
-    for n in notes:
-        if n.get("uncertain"):
-            w = n["w"]
-            shape.draw_oval(pymupdf.Rect(n["x"] - 0.3 * w, n["y"] - 0.62 * w, n["x"] + 1.3 * w, n["y"] + 0.62 * w))
-    shape.finish(color=CHECK_COLOR, width=0.7)
-    shape.commit()
-
-
 def draw_legend(page, count):
     """One line at the top of the first page explaining the orange marks."""
     fontname = label_fontname(page)

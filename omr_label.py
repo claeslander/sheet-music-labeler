@@ -22,6 +22,7 @@ import cv2
 import numpy as np
 import pymupdf
 
+import audiveris as av
 import note_names as nn
 
 os.environ.setdefault("ORT_LOGGING_LEVEL", "3")
@@ -99,7 +100,7 @@ def events_of(tokens, key=0):
     the key signature (homr only writes it where it is printed, so it is passed in from
     the previous system) and the bar number within the system."""
     clef = {"upper": nn.BOTTOM_LINE["treble"], "lower": nn.BOTTOM_LINE["bass"]}
-    events, join, bar = [], False, 0
+    events, join, bar, time_sig = [], False, 0, False
     for t in tokens:
         r = t.rhythm
         if r == "chord":
@@ -113,6 +114,8 @@ def events_of(tokens, key=0):
                 clef[t.position if t.position in clef else "upper"] = b
         elif r.startswith("keySignature_"):
             key = int(r.split("_")[1])
+        elif r.startswith("timeSignature"):
+            time_sig = True
         elif r.startswith("note") or r.startswith("rest"):
             item = None
             m = re.match(r"([A-G])(-?\d)", t.pitch or "")
@@ -123,13 +126,40 @@ def events_of(tokens, key=0):
             if join and events:
                 events[-1]["notes"].append(item)
             else:
-                events.append({"notes": [item], "clef": dict(clef), "key": key, "bar": bar})
+                events.append({"notes": [item], "clef": dict(clef), "key": key, "bar": bar, "time_before": time_sig})
+                time_sig = False
             join = False
             continue
         join = False
+    kept, carry = [], False
     for e in events:
         e["notes"] = [n for n in e["notes"] if n]
-    return [e for e in events if e["notes"]], key
+        carry = carry or e["time_before"]  # a rest after the time signature passes the mark on
+        if e["notes"]:
+            e["time_before"], carry = carry, False
+            kept.append(e)
+    if (carry or time_sig) and kept:
+        kept[-1]["time_after"] = True  # time signature at the end of the line
+    return kept, key
+
+
+def time_signature_zones(events, heads):
+    """x ranges where the model read a time signature: between the noteheads matched to the
+    event before it and those matched to the event after it. Digits there look like noteheads
+    to the segmentation, so unmatched heads in these ranges are dropped."""
+    xs = {}
+    for h in heads:
+        if "event" in h:
+            xs.setdefault(id(h["event"]), []).append(h["x"])
+    zones = []
+    for i, e in enumerate(events):
+        if e.get("time_before"):
+            left = next((max(xs[id(p)]) for p in reversed(events[:i]) if id(p) in xs), float("-inf"))
+            right = next((min(xs[id(n)]) for n in events[i:] if id(n) in xs), float("inf"))
+            zones.append((left, right))
+        if e.get("time_after"):
+            zones.append((max(xs.get(id(e), [float("-inf")])), float("inf")))
+    return zones
 
 
 def lines_at(staff, x):
@@ -208,6 +238,13 @@ def clusters_of(heads):
     return out
 
 
+def step_cost(a, b):
+    """How badly a model note and a notehead differ in height; exactly an octave apart is a
+    small cost, not a mismatch (the model reads 8va passages at sounding pitch)."""
+    d = abs(a - b)
+    return min(d, 3, 0.25 + abs(d - 7))
+
+
 def pair_cost(tokens, heads):
     """Best monotonic pairing of tokens and noteheads by step (per staff half). Returns cost, pairs."""
     total, pairs = 0.0, []
@@ -223,11 +260,11 @@ def pair_cost(tokens, heads):
         for i in range(1, n + 1):
             for j in range(1, m + 1):
                 D[i][j] = min(D[i - 1][j] + SKIP, D[i][j - 1] + SKIP,
-                              D[i - 1][j - 1] + min(abs(a[i - 1]["step"] - b[j - 1]["step"]), 3))
+                              D[i - 1][j - 1] + step_cost(a[i - 1]["step"], b[j - 1]["step"]))
         total += D[n][m]
         i, j = n, m
         while i and j:
-            if D[i][j] == D[i - 1][j - 1] + min(abs(a[i - 1]["step"] - b[j - 1]["step"]), 3):
+            if D[i][j] == D[i - 1][j - 1] + step_cost(a[i - 1]["step"], b[j - 1]["step"]):
                 pairs.append((a[i - 1], b[j - 1]))
                 i, j = i - 1, j - 1
             elif D[i][j] == D[i - 1][j] + SKIP:
@@ -448,6 +485,8 @@ def label_system(staff, tokens, centres=None, accidentals=(), key=0):
                 if h:
                     h.update(event=ev, tok=tok, synthetic=True)
                     heads.append(h)
+    zones = time_signature_zones(events, heads)
+    heads = [h for h in heads if "tok" in h or not any(lo < h["x"] < hi for lo, hi in zones)]
     heads.sort(key=lambda h: h["x"])
     ctx = events[0] if events else {"clef": {"upper": nn.BOTTOM_LINE["treble"], "lower": nn.BOTTOM_LINE["bass"]},
                                     "key": key, "bar": 0}
@@ -468,8 +507,10 @@ def label_system(staff, tokens, centres=None, accidentals=(), key=0):
         tok = h.get("tok")
         if tok:
             h["pitch"], h["alter"] = tok["pitch"], tok["alter"]
-            h["y"] += (h["step"] - tok["step"]) * h["unit"] / 2
-            h["check"] = not h.get("synthetic") and (tok["pitch"], tok["alter"]) != (geo, h["geo_alter"])
+            if abs(h["step"] - tok["step"]) == 1:  # the notehead's centre was a little off: trust the model
+                h["y"] += (h["step"] - tok["step"]) * h["unit"] / 2
+            # labels show no octave, so an octave apart (an 8va passage the model reads as sounding) agrees
+            h["check"] = not h.get("synthetic") and (tok["pitch"] % 7, tok["alter"]) != (geo % 7, h["geo_alter"])
         else:
             h["pitch"], h["alter"], h["uncertain"] = geo, h["geo_alter"], True
         h["letter"] = h["pitch"] % 7
@@ -477,6 +518,28 @@ def label_system(staff, tokens, centres=None, accidentals=(), key=0):
     if printed_keys["upper"]:
         end_key = printed_keys["upper"][-1][1]
     return notes, end_key
+
+
+def apply_audiveris(notes, aud, shape):
+    """Use Audiveris (a third, independent reader) on one page's notes:
+    - a notehead only our geometry saw, where Audiveris has none either, is dropped (fingerings,
+      hairpins and ottava lines leak into homr's notehead mask; Audiveris classifies them);
+    - a note marked only because the model and our geometry disagree by one accidental step
+      (e.g. ♮ against ♯) is unmarked when Audiveris reads exactly what the model read. On the test
+      piece the model was right in all of those cases; other disagreements stay marked."""
+    an, (aw, ah) = aud
+    fx, fy = shape[1] / aw, shape[0] / ah
+    out = []
+    for n in notes:
+        a = min((a for a in an if abs(a["x"] * fx - n["x"]) < 0.8 * n["unit"] and abs(a["y"] * fy - n["y"]) < 0.6 * n["unit"]),
+                key=lambda a: abs(a["y"] * fy - n["y"]), default=None)
+        if a is None and "tok" not in n:
+            continue
+        if (n.get("check") and a and (a["letter"], a["alter"]) == (n["pitch"] % 7, n["alter"])
+                and n["geo_pitch"] % 7 == n["pitch"] % 7 and abs(n["geo_alter"] - n["alter"]) == 1):
+            n["check"] = False
+        out.append(n)
+    return out
 
 
 def open_as_pdf(src):
@@ -495,23 +558,44 @@ _cache = {}  # file hash -> recognised notes per page; restyling must not re-run
 
 def read_notes(src, progress=print):
     """Recognise every page once. Returns a list (per page) of note dicts in PDF coordinates."""
-    key = hashlib.sha1(Path(src).read_bytes()).hexdigest()
-    if key in _cache:
-        return _cache[key]
-    pages, key = [], 0
+    digest = hashlib.sha1(Path(src).read_bytes()).hexdigest()
+    if digest in _cache:
+        return _cache[digest]
+    pages, key, read = [], 0, []
     with tempfile.TemporaryDirectory() as tmp:
-        for page in open_as_pdf(src):
-            png = Path(tmp, f"p{page.number + 1}.png")
-            page.get_pixmap(dpi=DPI, colorspace=pymupdf.csGRAY).save(png)
-            progress(f"page {page.number + 1}: recognising…")
-            notes = []
+        try:
+            aud_proc = av.start(src, tmp)
+        except (av.Unavailable, OSError):
+            aud_proc = None  # without Audiveris: homr and our geometry only
+        doc = open_as_pdf(src)
+        try:
+            for page in doc:
+                png = Path(tmp, f"p{page.number + 1}.png")
+                page.get_pixmap(dpi=DPI, colorspace=pymupdf.csGRAY).save(png)
+                progress(f"page {page.number + 1}: recognising…")
+                try:
+                    systems, shape, masks = recognise(png)
+                except Exception as e:  # homr raises on pages without music (title pages, text)
+                    progress(f"page {page.number + 1}: skipped ({e})")
+                    systems, shape, masks = [], (1, 1), None
+                page_notes, key = label_page(systems, masks, key)
+                read.append((page_notes, shape))
+        except BaseException:
+            if aud_proc:
+                aud_proc.kill()
+            raise
+        aud_pages = {}
+        if aud_proc:
+            progress("checking with Audiveris…")
             try:
-                systems, shape, masks = recognise(png)
-            except Exception as e:  # homr raises on pages without music (title pages, text)
-                progress(f"page {page.number + 1}: skipped ({e})")
-                systems, shape, masks = [], (1, 1), None
+                aud_pages = av.finish(aud_proc, tmp)
+            except Exception as e:  # never let the extra check break the result
+                progress(f"Audiveris check skipped ({e})")
+        for page, (page_notes, shape) in zip(doc, read):
+            if page.number + 1 in aud_pages:
+                page_notes = apply_audiveris(page_notes, aud_pages[page.number + 1], shape)
             sx, sy = page.rect.width / shape[1], page.rect.height / shape[0]
-            page_notes, key = label_page(systems, masks, key)
+            notes = []
             for n in page_notes:
                 notes.append({"staff": n["system"] * 2 + (n["half"] == "lower"), "small": False,
                               "x": (n["x"] - n["w"] / 2) * sx, "y": n["y"] * sy, "w": n["w"] * sx,
@@ -520,7 +604,7 @@ def read_notes(src, progress=print):
                               # not sure: the model and the geometric reading disagree, or only geometry saw it
                               "uncertain": bool(n.get("uncertain") or n.get("check"))})
             pages.append(notes)
-    _cache[key] = pages
+    _cache[digest] = pages
     return pages
 
 
@@ -533,7 +617,6 @@ def annotate(src, dst, style="letters", color="red", fontsize=5.4, progress=prin
         for n in notes:  # label size follows the staff size of the scan
             n["fs"] = fontsize / 5.0 * n["unit"]
         if notes:
-            nn.draw_check_marks(page, notes)
             nn.draw_labels(page, nn.layout(notes, [], fontsize, names), rgb)
     total = sum(len(p) for p in pages)
     if total == 0:
