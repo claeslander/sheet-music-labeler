@@ -2,6 +2,10 @@
 
 Writes the name of every note (C D E♭ … or Do Re Mi …) next to the note in a piano score, so you can read sheet music while you are still learning it.
 
+![The opening of Für Elise with a name next to every note](docs/demo.png)
+
+*The opening of Beethoven's Für Elise, engraved with [Verovio](https://www.verovio.org) and labelled by the app.*
+
 ## Install (once)
 
 Needs Python 3.11 or newer. Developed and tested on Debian Linux.
