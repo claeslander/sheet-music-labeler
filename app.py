@@ -4,10 +4,13 @@ Run: .venv/bin/python app.py   then open http://localhost:8765
 """
 import json
 import tempfile
+import uuid
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
+
+import pymupdf
 
 import note_names
 
@@ -19,13 +22,29 @@ if importlib.util.find_spec("homr"):  # optional: scanned scores need the homr O
 
 PORT = 8765
 PAGE = (Path(__file__).parent / "app.html").read_bytes()
+RESULTS = {}  # the last few labelled PDFs, by id, so the browser can fetch page images
 
 
 class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
-        if urlparse(self.path).path != "/":
+        url = urlparse(self.path)
+        if url.path == "/":
+            return self.reply(200, "text/html; charset=utf-8", PAGE)
+        if url.path != "/page":
             return self.send_error(404)
-        self.reply(200, "text/html; charset=utf-8", PAGE)
+        # one page of a labelled PDF as a PNG, `w` pixels wide
+        q = {k: v[0] for k, v in parse_qs(url.query).items()}
+        data = RESULTS.get(q.get("id"))
+        if data is None:
+            return self.send_error(404)
+        with pymupdf.open("pdf", data) as doc:
+            n = int(q.get("n", 0))
+            if not 0 <= n < doc.page_count:
+                return self.send_error(404)
+            page = doc[n]
+            zoom = min(max(int(q.get("w", 1200)), 200), 4000) / page.rect.width
+            png = page.get_pixmap(matrix=pymupdf.Matrix(zoom, zoom), alpha=False).tobytes("png")
+        self.reply(200, "image/png", png, {"Cache-Control": "max-age=3600"})
 
     def do_POST(self):
         url = urlparse(self.path)
@@ -54,7 +73,15 @@ class Handler(BaseHTTPRequestHandler):
                 return self.error(str(e), scanned=scanned)
             except Exception as e:  # not a PDF, corrupt file, ...
                 return self.error(f"could not read this file ({e})")
-            self.reply(200, "application/pdf", dst.read_bytes(), headers)
+            out = dst.read_bytes()
+            with pymupdf.open("pdf", out) as doc:
+                headers["X-Pages"] = ",".join(f"{p.rect.width:.1f}x{p.rect.height:.1f}" for p in doc)
+            key = uuid.uuid4().hex[:12]
+            RESULTS[key] = out
+            for old in list(RESULTS)[:-5]:
+                del RESULTS[old]
+            headers["X-Id"] = key
+            self.reply(200, "application/pdf", out, headers)
 
     def error(self, message, **extra):
         self.reply(422, "application/json", json.dumps({"error": message, **extra}).encode())

@@ -4,91 +4,110 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Sheet Music Labeler</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
   :root {
-    --bg: #f6f4ef; --panel: #ffffff; --ink: #1d1b18; --muted: #6f6a61; --line: #e2ddd3;
-    --accent: #b3261e; --accent-ink: #ffffff; --drop: #fbfaf7;
-  }
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --bg: #161513; --panel: #201f1c; --ink: #ece8e1; --muted: #a39d92; --line: #36332e;
-      --accent: #e5554b; --accent-ink: #1a0f0e; --drop: #1b1a17;
-    }
+    --side: #000000; --card: #111111; --edge: #262626; --edge2: #333333;
+    --ink: #ffffff; --soft: #d4d4d4; --muted: #a3a3a3; --stage: #ededed;
   }
   * { box-sizing: border-box; }
   html, body { height: 100%; margin: 0; }
   body {
-    background: var(--bg); color: var(--ink);
-    font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-    display: grid; grid-template-columns: 320px 1fr; gap: 0;
+    background: var(--stage); color: var(--ink);
+    font: 15px/1.45 Manrope, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    display: grid; grid-template-columns: 344px 1fr;
   }
   aside {
-    background: var(--panel); border-right: 1px solid var(--line);
-    padding: 28px 24px; display: flex; flex-direction: column; gap: 26px; overflow-y: auto;
+    background: var(--side); padding: 28px 26px; display: flex; flex-direction: column; gap: 22px; overflow-y: auto;
   }
-  h1 { font: 600 22px/1.2 Georgia, "Times New Roman", serif; margin: 0; letter-spacing: -0.01em; }
-  h1 span { color: var(--accent); }
-  .sub { color: var(--muted); margin: 6px 0 0; font-size: 13.5px; }
+  h1 { font-size: 19px; font-weight: 800; letter-spacing: -0.01em; margin: 0; }
   #drop {
-    border: 1.5px dashed var(--line); border-radius: 12px; background: var(--drop);
-    padding: 26px 16px; text-align: center; cursor: pointer; transition: border-color .15s, background .15s;
+    border: 1.5px dashed var(--edge2); border-radius: 12px; background: var(--card);
+    padding: 18px 16px; text-align: center; cursor: pointer; transition: border-color .15s;
   }
-  #drop:hover, #drop.over { border-color: var(--accent); }
-  #drop svg { width: 34px; height: 34px; color: var(--muted); }
-  #drop .big { font-weight: 600; margin-top: 8px; }
+  #drop:hover, #drop.over, #drop:focus-visible { border-color: var(--ink); outline: none; }
+  #drop svg { width: 30px; height: 30px; color: var(--muted); }
+  #drop .big { font-weight: 700; margin-top: 8px; }
   #drop .small { color: var(--muted); font-size: 13px; }
-  #drop .file { margin-top: 10px; font-size: 13px; color: var(--ink); word-break: break-all; }
-  label.h { display: block; font-size: 12px; font-weight: 600; text-transform: uppercase;
-            letter-spacing: .06em; color: var(--muted); margin-bottom: 8px; }
-  .seg { display: grid; grid-template-columns: 1fr 1fr; border: 1px solid var(--line); border-radius: 9px; overflow: hidden; }
-  .seg button { border: 0; background: transparent; color: var(--ink); padding: 8px 6px; font: inherit; cursor: pointer; }
-  .seg button + button { border-left: 1px solid var(--line); }
-  .seg button.on { background: var(--ink); color: var(--panel); }
-  .seg small { display: block; font-size: 11.5px; opacity: .7; }
+  #drop .file { margin-top: 10px; font-size: 13.5px; font-weight: 600; word-break: break-all; }
+  #drop .file:empty { display: none; }
+  label.h { display: block; font-size: 11.5px; font-weight: 700; text-transform: uppercase;
+            letter-spacing: .09em; color: var(--muted); margin-bottom: 10px; }
+  .seg { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 4px; border-radius: 12px;
+         background: var(--card); border: 1px solid var(--edge); }
+  .seg button { min-height: 52px; border: 0; border-radius: 9px; background: transparent; color: var(--ink);
+                font: 700 15px/1.2 inherit; font-family: inherit; cursor: pointer; }
+  .seg button.on { background: var(--ink); color: var(--side); }
+  .seg small { display: block; font-size: 11.5px; font-weight: 500; color: var(--muted); margin-top: 2px; }
+  .seg button.on small { color: #525252; }
   .swatches { display: flex; gap: 10px; }
   .swatches button {
-    width: 30px; height: 30px; border-radius: 50%; border: 2px solid var(--panel);
-    outline: 1.5px solid var(--line); cursor: pointer; padding: 0;
+    width: 44px; height: 44px; border-radius: 50%; border: 3px solid var(--side);
+    outline: 1px solid var(--edge2); cursor: pointer; padding: 0;
   }
   .swatches button.on { outline: 2px solid var(--ink); }
-  input[type=range] { width: 100%; accent-color: var(--accent); }
+  input[type=range] { width: 100%; accent-color: var(--ink); }
   .row { display: flex; justify-content: space-between; align-items: baseline; }
-  .row output { font-variant-numeric: tabular-nums; color: var(--muted); font-size: 13px; }
+  .row label.h { margin-bottom: 10px; }
+  .row output { font-variant-numeric: tabular-nums; color: var(--soft); font-size: 13px; }
+  .grow { flex-grow: 1; }
+  #status { font-size: 13.5px; color: var(--soft); }
+  #status:not(:empty) { padding: 16px; border-radius: 12px; background: var(--card); border: 1px solid var(--edge); }
+  #status.err { color: var(--ink); font-weight: 600; border-color: var(--ink); }
+  #status code { color: var(--ink); }
   #download {
-    display: block; text-align: center; text-decoration: none; padding: 11px; border-radius: 10px;
-    background: var(--accent); color: var(--accent-ink); font-weight: 600;
+    min-height: 50px; border-radius: 12px; background: var(--ink); color: var(--side);
+    font-weight: 700; text-decoration: none; display: flex; align-items: center; justify-content: center; gap: 10px;
   }
-  #download[aria-disabled=true] { opacity: .35; pointer-events: none; }
-  #status { font-size: 13.5px; color: var(--muted); min-height: 2.6em; }
-  #status.err { color: var(--accent); }
-  main { position: relative; min-width: 0; }
-  iframe { width: 100%; height: 100%; border: 0; display: none; background: #fff; }
+  #download:hover { opacity: .88; }
+  #download[aria-disabled=true] { opacity: .3; pointer-events: none; }
+  main { position: relative; min-width: 0; height: 100vh; display: flex; flex-direction: column; color: #000; }
+  .bar {
+    height: 64px; flex-shrink: 0; display: none; align-items: center; justify-content: space-between; gap: 16px;
+    padding: 0 28px; border-bottom: 1px solid #dddddd; background: #f7f7f7;
+  }
+  .bar .title { font-size: 14px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .bar .nav { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+  .bar button {
+    width: 44px; height: 44px; border-radius: 10px; border: 1px solid #dddddd; background: #fff; color: #000;
+    cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0;
+  }
+  .bar button:hover { border-color: #000; }
+  .bar button:disabled { opacity: .35; cursor: default; border-color: #dddddd; }
+  #pageNo { min-width: 92px; text-align: center; font-size: 13.5px; color: #404040; font-variant-numeric: tabular-nums; }
+  #view { flex-grow: 1; overflow-y: auto; display: none; flex-direction: column; align-items: center; gap: 28px; padding: 32px 24px 48px; }
+  #view img {
+    display: block; width: 100%; max-width: 880px; height: auto; background: #fff; border-radius: 4px;
+    box-shadow: 0 1px 2px rgba(0,0,0,.08), 0 12px 40px rgba(0,0,0,.12);
+  }
+  main.ready .bar, main.ready #view { display: flex; }
+  main.ready .empty { display: none; }
   .empty {
-    position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted); text-align: center; padding: 24px;
+    position: absolute; inset: 0; display: grid; place-items: center; color: #5e5e5e; text-align: center; padding: 24px;
   }
-  .empty .staff { font: 64px/1 Georgia, serif; opacity: .25; }
-  .spinner { width: 18px; height: 18px; border: 2px solid var(--line); border-top-color: var(--accent);
-             border-radius: 50%; display: inline-block; vertical-align: -4px; margin-right: 8px; animation: spin .8s linear infinite; }
+  .empty .staff { font: 64px/1 Georgia, serif; color: #000; opacity: .2; }
+  .spinner { width: 16px; height: 16px; border: 2px solid var(--edge2); border-top-color: var(--ink);
+             border-radius: 50%; display: inline-block; vertical-align: -3px; margin-right: 8px; animation: spin .8s linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
   @media (max-width: 760px) {
     body { grid-template-columns: 1fr; grid-template-rows: auto 70vh; }
-    aside { border-right: 0; border-bottom: 1px solid var(--line); padding: 20px 16px; }
+    aside { padding: 20px 16px; }
+    main { height: 70vh; }
+    .grow { display: none; }
   }
 </style>
 </head>
 <body>
 <aside>
-  <div>
-    <h1>Sheet Music <span>Labeler</span></h1>
-    <p class="sub">Writes the name of every note into your sheet music. Everything stays on this computer.</p>
-  </div>
+  <h1>Sheet Music Labeler</h1>
 
   <div id="drop" tabindex="0">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
       <path d="M12 16V4M7 9l5-5 5 5"/><path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/>
     </svg>
     <div class="big">Drop a score PDF here</div>
-    <div class="small">or click to choose a file (scans and photos work too)</div>
+    <div class="small">or click to choose a file</div>
     <div class="file" id="fname"></div>
     <input type="file" id="file" accept="application/pdf,image/png,image/jpeg,image/tiff,image/bmp,image/gif,image/webp" hidden>
   </div>
@@ -107,7 +126,7 @@
       <button data-v="red" class="on" style="background:#c7141f" aria-label="red"></button>
       <button data-v="blue" style="background:#0d4dbf" aria-label="blue"></button>
       <button data-v="green" style="background:#008040" aria-label="green"></button>
-      <button data-v="black" style="background:#111" aria-label="black"></button>
+      <button data-v="black" style="background:#2b2b2b" aria-label="black"></button>
     </div>
   </div>
 
@@ -116,13 +135,25 @@
     <input type="range" id="size" min="3.5" max="7" step="0.1" value="5.4">
   </div>
 
+  <div class="grow"></div>
   <div id="status"></div>
-  <a id="download" aria-disabled="true" download>Download labelled PDF</a>
+  <a id="download" aria-disabled="true" download>
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v12M7 11l5 5 5-5"/><path d="M4 20h16"/></svg>
+    Download labelled PDF
+  </a>
 </aside>
 
-<main>
+<main id="main">
+  <div class="bar">
+    <div class="title" id="title"></div>
+    <div class="nav">
+      <button id="prev" aria-label="Previous page"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></button>
+      <span id="pageNo"></span>
+      <button id="next" aria-label="Next page"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
+    </div>
+  </div>
   <div class="empty" id="empty"><div><div class="staff">𝄞 ♩ ♪</div><p>Your labelled score will appear here.</p></div></div>
-  <iframe id="view" title="Labelled score"></iframe>
+  <div id="view" aria-label="Labelled score"></div>
 </main>
 
 <script>
@@ -151,6 +182,48 @@ drop.addEventListener("drop", (e) => load(e.dataTransfer.files[0]));
 // dropping anywhere else should not navigate away
 window.addEventListener("dragover", (e) => e.preventDefault());
 window.addEventListener("drop", (e) => { e.preventDefault(); if (e.dataTransfer.files[0]) load(e.dataTransfer.files[0]); });
+
+// the labelled score, drawn as page images by the server
+const view = $("view");
+let pages = [];
+
+function show(id, sizes) {
+  const keepScroll = view.scrollTop;
+  // image width in device pixels, rounded up so the browser can reuse cached pages
+  const w = Math.ceil(Math.min(view.clientWidth || 880, 880) * devicePixelRatio / 200) * 200;
+  view.replaceChildren(...sizes.split(",").map((s, i) => {
+    const [pw, ph] = s.split("x").map(Number);
+    const img = new Image();
+    img.loading = "lazy"; img.alt = "Page " + (i + 1);
+    img.style.aspectRatio = pw + " / " + ph;
+    img.src = `/page?id=${id}&n=${i}&w=${w}`;
+    return img;
+  }));
+  pages = [...view.children];
+  $("title").textContent = name.replace(/\.[^.]+$/, "");
+  $("main").classList.add("ready");
+  view.scrollTop = keepScroll;
+  current();
+}
+
+function current() {
+  const top = view.getBoundingClientRect().top + view.clientHeight / 3;
+  let n = pages.findIndex((p) => p.getBoundingClientRect().bottom > top);
+  if (n < 0) n = pages.length - 1;
+  $("pageNo").textContent = `Page ${n + 1} of ${pages.length}`;
+  $("prev").disabled = n === 0; $("next").disabled = n === pages.length - 1;
+  return n;
+}
+view.addEventListener("scroll", current);
+window.addEventListener("resize", current);
+const go = (d) => { const p = pages[current() + d]; if (p) view.scrollTo({ top: p.offsetTop - 32, behavior: "smooth" }); };
+$("prev").addEventListener("click", () => go(-1));
+$("next").addEventListener("click", () => go(1));
+window.addEventListener("keydown", (e) => {
+  if (!pages.length || e.target.closest("input, button, #drop")) return;
+  if (e.key === "ArrowRight" || e.key === "PageDown") { e.preventDefault(); go(1); }
+  if (e.key === "ArrowLeft" || e.key === "PageUp") { e.preventDefault(); go(-1); }
+});
 
 function status(html, err) { $("status").innerHTML = html; $("status").classList.toggle("err", !!err); }
 
@@ -187,19 +260,19 @@ async function run() {
   const blob = await res.blob();
   if (url) URL.revokeObjectURL(url);
   url = URL.createObjectURL(blob);
-  $("view").src = url; $("view").style.display = "block"; $("empty").style.display = "none";
+  show(res.headers.get("X-Id"), res.headers.get("X-Pages"));
   const dl = $("download");
   dl.href = url; dl.download = name.replace(/\.pdf$/i, "") + "_note_names.pdf"; dl.setAttribute("aria-disabled", "false");
   const n = Number(res.headers.get("X-Notes")).toLocaleString();
   if (res.headers.get("X-Mode") === "omr") {
     const guesses = Number(res.headers.get("X-Notes")) - Number(res.headers.get("X-Confirmed"));
     status(`${n} notes labelled from the scan. ` + (guesses
-      ? `<b style="color:#e06c00">${guesses} marked orange</b>: not sure, please check those.`
+      ? `<b style="color:#ff9a3d">${guesses} marked orange</b>: not sure, please check those.`
       : "No uncertain notes.") + " A few notes may be missing entirely.");
   } else {
     const unsure = Number(res.headers.get("X-Notes")) - Number(res.headers.get("X-Confirmed"));
     status(`${n} notes labelled, read exactly from the PDF.` + (unsure
-      ? ` <b style="color:#e06c00">${unsure} marked orange</b>: this score has no barlines there, so it is unclear whether an earlier accidental still applies.`
+      ? ` <b style="color:#ff9a3d">${unsure} marked orange</b>: this score has no barlines there, so it is unclear whether an earlier accidental still applies.`
       : ""));
   }
 }
