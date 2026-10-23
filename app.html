@@ -86,7 +86,7 @@
   .empty {
     position: absolute; inset: 0; display: grid; place-items: center; color: #5e5e5e; text-align: center; padding: 24px;
   }
-  .empty .staff { font: 64px/1 Georgia, serif; color: #000; opacity: .2; }
+  .empty .staff { display: block; width: 120px; height: 56px; margin: 0 auto 4px; color: #000; opacity: .2; }
   .spinner { width: 16px; height: 16px; border: 2px solid var(--edge2); border-top-color: var(--ink);
              border-radius: 50%; display: inline-block; vertical-align: -3px; margin-right: 8px; animation: spin .8s linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
@@ -152,7 +152,7 @@
       <button id="next" aria-label="Next page"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
     </div>
   </div>
-  <div class="empty" id="empty"><div><div class="staff">𝄞 ♩ ♪</div><p>Your labelled score will appear here.</p></div></div>
+  <div class="empty" id="empty"><div><svg class="staff" viewBox="0 0 120 56" aria-hidden="true"><g stroke="currentColor" stroke-width="1.4"><path d="M4 12h112M4 20h112M4 28h112M4 36h112M4 44h112"/><path d="M45.5 38V12M75.5 30V4M105.5 34V8"/></g><g fill="currentColor"><ellipse cx="40" cy="40" rx="6.2" ry="4.4" transform="rotate(-20 40 40)"/><ellipse cx="70" cy="32" rx="6.2" ry="4.4" transform="rotate(-20 70 32)"/><ellipse cx="100" cy="36" rx="6.2" ry="4.4" transform="rotate(-20 100 36)"/></g></svg><p>Your labelled score will appear here.</p></div></div>
   <div id="view" aria-label="Labelled score"></div>
 </main>
 
