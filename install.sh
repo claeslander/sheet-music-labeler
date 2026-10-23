@@ -6,7 +6,7 @@
 #   2. the Python packages, at the exact versions in requirements.lock, into .venv/
 #   3. the OMR model weights
 #   4. Audiveris (optional, improves scans), from Flathub, for your user only
-#   5. a self-test: the app reads a small test score and every note name is compared
+#   5. a self-test: the app reads a small test PDF and test score and every note name is compared
 #
 # Run it from anywhere as your normal user (not root):
 #   ./install.sh               ask before using sudo (only needed to install Flatpak)
@@ -210,7 +210,7 @@ if [ "$WITH_AUDIVERIS" = 1 ]; then
 fi
 
 # --- 5. Self-test ---------------------------------------------------------------
-step "Testing: reading a test score like a scan"
+step "Testing: reading a test PDF, and a test score like a scan"
 # "|| result=$?" keeps a non-zero exit from tripping set -e and the ERR trap
 result=0
 "$PY" tests/selftest.py >"$TOOLS/selftest.out" 2>>"$LOG" || result=$?

@@ -34,8 +34,8 @@ class Handler(BaseHTTPRequestHandler):
         q = {k: v[0] for k, v in parse_qs(url.query).items()}
         data = self.rfile.read(int(self.headers.get("Content-Length", 0)))
         ext = q.get("ext", "pdf").lower()
-        if ext not in ("pdf", "png", "jpg", "jpeg"):
-            return self.error("only PDF, PNG and JPG files are supported")
+        if ext not in ("pdf", "png", "jpg", "jpeg", "tif", "tiff", "bmp", "gif", "webp"):
+            return self.error("only PDF and image files (PNG, JPG, TIFF, BMP, GIF, WebP) are supported")
         args = (q.get("style", "letters"), q.get("color", "red"), float(q.get("size", 5.4)))
         with tempfile.TemporaryDirectory() as tmp:
             src, dst = Path(tmp, "in." + ext), Path(tmp, "out.pdf")
@@ -47,8 +47,8 @@ class Handler(BaseHTTPRequestHandler):
                     n, ok = omr_label.annotate(src, dst, *args, progress=lambda s: None)
                     headers = {"X-Notes": str(n), "X-Confirmed": str(ok), "X-Mode": "omr"}
                 else:
-                    n = note_names.annotate(src, dst, *args)
-                    headers = {"X-Notes": str(n), "X-Mode": "exact"}
+                    n, unsure = note_names.annotate(src, dst, *args)
+                    headers = {"X-Notes": str(n), "X-Confirmed": str(n - unsure), "X-Mode": "exact"}
             except note_names.UnsupportedPDF as e:
                 scanned = q.get("mode") != "omr" and omr_label is not None
                 return self.error(str(e), scanned=scanned)

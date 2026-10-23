@@ -90,7 +90,7 @@
     <div class="big">Drop a score PDF here</div>
     <div class="small">or click to choose a file (scans and photos work too)</div>
     <div class="file" id="fname"></div>
-    <input type="file" id="file" accept="application/pdf,image/png,image/jpeg" hidden>
+    <input type="file" id="file" accept="application/pdf,image/png,image/jpeg,image/tiff,image/bmp,image/gif,image/webp" hidden>
   </div>
 
   <div>
@@ -197,7 +197,10 @@ async function run() {
       ? `<b style="color:#e06c00">${guesses} marked orange</b>: not sure, please check those.`
       : "No uncertain notes.") + " A few notes may be missing entirely.");
   } else {
-    status(`${n} notes labelled, read exactly from the PDF.`);
+    const unsure = Number(res.headers.get("X-Notes")) - Number(res.headers.get("X-Confirmed"));
+    status(`${n} notes labelled, read exactly from the PDF.` + (unsure
+      ? ` <b style="color:#e06c00">${unsure} marked orange</b>: this score has no barlines there, so it is unclear whether an earlier accidental still applies.`
+      : ""));
   }
 }
 </script>

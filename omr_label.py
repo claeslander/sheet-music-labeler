@@ -7,11 +7,13 @@ positions. Every note is also read a second time without the model: from its pos
 the clef, the printed key signature and the accidentals we detect ourselves. Notes where
 the two readings disagree (or that only one of them saw) are marked orange: "please check".
 
-Usage: python omr_label.py input.pdf|png|jpg [output.pdf] [--style letters|solfege] [--color red|...]
+Usage: python omr_label.py input.pdf|png|jpg|tif|... [output.pdf] [--style letters|solfege] [--color red|...]
 Expect ~25 s per page on a CPU.
 """
 import argparse
 import hashlib
+import io
+import itertools
 import os
 import re
 import sys
@@ -32,6 +34,8 @@ CLEF_REF = {"G": 4 * 7 + 4, "F": 3 * 7 + 3, "C": 4 * 7 + 0}  # G4, F3, C4: the p
 SHARP_ORDER, FLAT_ORDER = [3, 0, 4, 1, 5, 2, 6], [6, 2, 5, 1, 4, 0, 3]  # F C G D A E B / B E A D G C F
 SKIP = 1.5  # alignment cost of an unmatched note (in half staff spaces)
 DPI = 300
+MAX_SIDES = (2500, 3600)  # px: no page is rendered bigger than an A4 page at 300 dpi
+IMAGE_TYPES = (".png", ".jpg", ".jpeg", ".tif", ".tiff", ".bmp", ".gif", ".webp")
 
 
 def _homr():
@@ -82,11 +86,27 @@ def recognise(png):
                 cur.append(t)
         if cur:
             segments.append(cur)
-        if len(segments) != len(staffs):  # a staff was skipped: we can't tell which, fall back to geometry
-            segments = [[] for _ in staffs]
+        if len(segments) != len(staffs):
+            segments = match_segments(segments, staffs)
         systems += list(zip(staffs, segments))
     pred = captured["pred"]
     return systems, image.shape, {"notehead": pred.notehead, "accidental": pred.clefs_keys}
+
+
+def match_segments(segments, staffs):
+    """The model's output, one segment per staff, when it skipped a staff or two: the staffs those
+    segments belong to are the ones whose notehead counts fit their note counts best. The skipped
+    staffs get no segment (they are read by geometry alone); with more missing, all of them."""
+    missing = len(staffs) - len(segments)
+    if not 0 < missing <= 2:
+        return [[] for _ in staffs]
+    notes = [sum(t.rhythm.startswith("note") for t in seg) for seg in segments]
+    heads = [len(st.get_notes()) for st in staffs]
+    best = min(itertools.combinations(range(len(staffs)), missing),
+               key=lambda skip: sum(abs(n - h) for n, h in zip(notes, [h for i, h in enumerate(heads)
+                                                                       if i not in skip])))
+    it = iter(segments)
+    return [[] if i in best else next(it) for i in range(len(staffs))]
 
 
 def bottom_of(clef):
@@ -543,14 +563,50 @@ def apply_audiveris(notes, aud, shape):
 
 
 def open_as_pdf(src):
-    """Open a PDF, or wrap a PNG/JPG in a one-page PDF so we can draw on it."""
+    """Open a PDF, or turn an image (every page of a TIFF) into a PDF so we can draw on it."""
     src = Path(src)
-    if src.suffix.lower() not in (".png", ".jpg", ".jpeg"):
+    if src.suffix.lower() not in IMAGE_TYPES:
         return pymupdf.open(src)
-    doc = pymupdf.open()
-    rect = pymupdf.open(src)[0].rect
-    doc.new_page(width=rect.width, height=rect.height).insert_image(rect, filename=str(src))
-    return doc
+    try:
+        return pymupdf.open("pdf", pymupdf.open(src).convert_to_pdf())
+    except (RuntimeError, ValueError):  # a type PyMuPDF doesn't read (WebP): convert with Pillow
+        from PIL import Image, ImageSequence
+        doc = pymupdf.open()
+        for frame in ImageSequence.Iterator(Image.open(src)):
+            buf = io.BytesIO()
+            frame.convert("RGB").save(buf, "PNG")
+            page = doc.new_page(width=frame.width, height=frame.height)
+            page.insert_image(page.rect, stream=buf.getvalue())
+        return doc
+
+
+def render(page, path):
+    """Save the page as a greyscale image for the OMR model: a scanned page at the resolution of
+    its image, anything else at 300 dpi, but no bigger than an A4 page at 300 dpi. (An image file
+    without a resolution counts as 72 dpi: 300 dpi would make a photo's page huge.)"""
+    zoom = DPI / 72
+    images = page.get_image_info()
+    if len(images) == 1 and abs(pymupdf.Rect(images[0]["bbox"]) & page.rect) > 0.8 * abs(page.rect):
+        zoom = images[0]["width"] / pymupdf.Rect(images[0]["bbox"]).width  # the image's own pixels
+    short, long_ = sorted((page.rect.width, page.rect.height))
+    zoom = min(zoom, MAX_SIDES[0] / short, MAX_SIDES[1] / long_)
+    pix = page.get_pixmap(matrix=pymupdf.Matrix(zoom, zoom), colorspace=pymupdf.csGRAY)
+    img = np.frombuffer(pix.samples, np.uint8).reshape(pix.h, pix.stride)[:, :pix.w]
+    if os.environ.get("OMR_NO_FLATTEN"):
+        cv2.imwrite(str(path), img)
+        return
+    cv2.imwrite(str(path), even_light(img))
+
+
+def even_light(img):
+    """Even out uneven lighting (a photo, a shadow, a yellowed page): divide by the paper's own
+    brightness, estimated by spreading the light parts over the ink (which is never wider than
+    a beam), so paper comes out white everywhere and ink keeps its contrast."""
+    k = max(15, min(img.shape) // 40) | 1
+    paper = cv2.dilate(img, cv2.getStructuringElement(cv2.MORPH_RECT, (k, k)))
+    paper = cv2.GaussianBlur(paper, (0, 0), k)
+    out = img.astype(np.float32) / np.maximum(paper.astype(np.float32), 1) * 255
+    return np.clip(out, 0, 255).astype(np.uint8)
 
 
 _cache = {}  # file hash -> recognised notes per page; restyling must not re-run the model
@@ -563,15 +619,19 @@ def read_notes(src, progress=print):
         return _cache[digest]
     pages, key, read = [], 0, []
     with tempfile.TemporaryDirectory() as tmp:
+        doc = open_as_pdf(src)
+        aud_src = src
+        if Path(src).suffix.lower() in (".bmp", ".gif", ".webp"):  # image types Audiveris doesn't read
+            aud_src = Path(tmp, "converted.png")
+            render(doc[0], aud_src)
         try:
-            aud_proc = av.start(src, tmp)
+            aud_proc = av.start(aud_src, tmp)
         except (av.Unavailable, OSError):
             aud_proc = None  # without Audiveris: homr and our geometry only
-        doc = open_as_pdf(src)
         try:
             for page in doc:
                 png = Path(tmp, f"p{page.number + 1}.png")
-                page.get_pixmap(dpi=DPI, colorspace=pymupdf.csGRAY).save(png)
+                render(page, png)
                 progress(f"page {page.number + 1}: recognising…")
                 try:
                     systems, shape, masks = recognise(png)
