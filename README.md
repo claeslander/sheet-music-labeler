@@ -115,6 +115,38 @@ On Windows, use `.venv\Scripts\python` instead of `.venv/bin/python`. The result
 
 ## How it reads a score
 
+```mermaid
+flowchart TB
+    pdf["PDF from notation software<br/>MuseScore, Sibelius, Finale, Dorico, LilyPond …"]
+    scan["Scan or photo<br/>PDF, PNG, JPG, TIFF, BMP, GIF, WebP"]
+
+    subgraph exact["Exact reader: note_names.py"]
+        direction TB
+        e1["Read symbols and staff lines<br/>(PyMuPDF)"] --> e2["Draw the embedded music font<br/>(fontTools)"]
+        e2 --> e3["Recognise symbols by shape<br/>(OpenCV, 767 reference symbols)"]
+        e3 --> e4["Name the notes<br/>clef, key, accidentals, ties"]
+    end
+
+    subgraph omr["Scan reader: omr_label.py"]
+        direction TB
+        s1["Even out the light<br/>(OpenCV, Pillow)"] --> s2["homr segmentation model<br/>noteheads, accidentals"]
+        s1 --> s3["homr transformer model<br/>reads each staff"]
+        s1 --> s4["Audiveris, optional<br/>symbol classifier"]
+        s2 --> s5{"Readings<br/>agree?"}
+        s3 --> s5
+        s4 --> s5
+    end
+
+    pdf --> e1
+    pdf -. "no music font" .-> s1
+    scan --> s1
+    e4 --> out["Labelled PDF<br/>(PyMuPDF)"]
+    s5 -- "yes: your colour" --> out
+    s5 -- "no: orange" --> out
+```
+
+Both readers run on your own computer. The two homr models are neural networks, run with ONNX Runtime; everything else is ordinary code.
+
 Note names follow the notation exactly as written: the letter comes from the line or space the note sits on, the ♯/♭/♮ from the key signature and from accidentals earlier in the same bar. A note is never respelled (a B♭ stays B♭, it does not become A♯).
 
 | | `note_names.py`: exact | `omr_label.py`: scans and photos |
