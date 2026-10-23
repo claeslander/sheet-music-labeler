@@ -89,20 +89,24 @@ It reads a small test PDF, and a small test score like a scan (downloading the O
 
    Your browser opens http://localhost:8765 (open it yourself if it doesn't). Keep the terminal open while you use the app; Ctrl+C stops it.
 
-2. Add a score: drag a PDF, scan or photo (PDF, PNG, JPG, TIFF, BMP, GIF or WebP) onto the box on the left, or click the box and pick a file.
+2. Add your scores: drag one or more PDFs, scans or photos (PDF, PNG, JPG, TIFF, BMP, GIF or WebP) onto the start screen, or click it and pick the files.
 
-3. Wait for the result. It appears on the right:
+3. Wait for the result. The first score opens straight away, the others are read one after another:
    - a PDF exported from notation software takes a few seconds;
    - a scan or photo is detected automatically and read by the OMR model, which takes about 10-25 seconds per page (about 25 seconds with Audiveris, which runs at the same time).
 
-4. Adjust it if you like. The score is redrawn straight away (scans are not read again):
+4. Adjust it in the bar at the bottom if you like. The score is redrawn straight away (scans are not read again):
    - **Names**: letters (C D E) or solfège (Do Re Mi)
-   - **Colour**: red, blue, green or black
+   - **Colour**: red, blue, black, or any colour from the last circle (a colour picker, which also takes a hex code like `#1a7f37`)
    - **Label size**: the size of the names
 
-5. Click **Download labelled PDF**. The file gets `_note_names` added to its name.
+5. Correct a name if you need to: click it in the score and type over it, or pick a name and ♭, ♮ or ♯ in the small bar that appears next to it. Enter saves, Tab goes to the next name, Esc cancels, and an empty name removes the label. A corrected orange name is no longer orange.
 
-For a scan, the status on the left (and the top of page 1 in the PDF) says how many notes are marked orange: check those, the app is not sure about them (see below). A PDF from notation software only gets orange marks in music without barlines (see [Limits](#limits)).
+6. Click **Download**. The file gets `_note_names` added to its name. With several scores, Download asks whether you want this score or all of them in one zip.
+
+The back arrow on the left of the bar (or Esc) returns to the start screen, which lists your scores: open one, remove one, add more, or download them all.
+
+For a scan, the bar (and the top of page 1 in the PDF) says how many notes are marked orange: check those, the app is not sure about them (see below). Hover over the orange line on page 1 to remove it from the PDF. A PDF from notation software only gets orange marks in music without barlines (see [Limits](#limits)).
 
 ## Use the command line
 
@@ -111,7 +115,7 @@ For a scan, the status on the left (and the top of page 1 in the PDF) says how m
 .venv/bin/python omr_label.py scan.pdf                  # scan or photo (PDF or image)
 ```
 
-On Windows, use `.venv\Scripts\python` instead of `.venv/bin/python`. The result is saved next to the input as `score_note_names.pdf` (or `scan_note_names_omr.pdf`); pass a second file name to choose another. Options for both: `--style solfege`, `--color red|blue|green|black`, `--size 6` (label size in points).
+On Windows, use `.venv\Scripts\python` instead of `.venv/bin/python`. The result is saved next to the input as `score_note_names.pdf` (or `scan_note_names_omr.pdf`); pass a second file name to choose another. Options for both: `--style solfege`, `--color red|blue|black` or a hex colour like `--color "#1a7f37"`, `--size 6` (label size in points).
 
 ## How it reads a score
 

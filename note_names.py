@@ -46,8 +46,22 @@ FONT_PROFILES = {
 
 LETTERS = ["C", "D", "E", "F", "G", "A", "B"]
 SOLFEGE = ["Do", "Re", "Mi", "Fa", "Sol", "La", "Si"]
-COLORS = {"red": (0.78, 0.08, 0.12), "blue": (0.05, 0.3, 0.75),
-          "green": (0.0, 0.5, 0.25), "black": (0, 0, 0)}
+COLORS = {"red": (0.78, 0.08, 0.12), "blue": (0.05, 0.3, 0.75), "black": (0, 0, 0)}
+
+
+def color_rgb(color):
+    """A colour name from COLORS, or a hex colour like "#1a7f37", as PyMuPDF wants it."""
+    m = re.fullmatch(r"#?([0-9a-fA-F]{6})", color or "")
+    if m:
+        return tuple(int(m.group(1)[i:i + 2], 16) / 255 for i in (0, 2, 4))
+    return COLORS.get(color, COLORS["red"])
+
+
+def color_arg(color):
+    """argparse check for --color."""
+    if color in COLORS or re.fullmatch(r"#?[0-9a-fA-F]{6}", color):
+        return color
+    raise argparse.ArgumentTypeError(f"use {', '.join(COLORS)} or a hex colour like #1a7f37")
 
 # diatonic step of the bottom staff line, counted from C0 (C0=0, D0=1, ...)
 BOTTOM_LINE = {"treble": 4 * 7 + 2, "bass": 2 * 7 + 4}  # E4, G2
@@ -758,51 +772,106 @@ def label_fontname(page):
     return "lbl"
 
 
-def draw_labels(page, labels, rgb):
-    """Draw labels with a soft white backdrop so they stay legible over stems and beams."""
+def draw_labels(page, labels, rgb, edits=None):
+    """Draw labels with a soft white backdrop so they stay legible over stems and beams.
+
+    `edits` maps a label's index on the page to the text typed in the app instead (empty: no
+    label); an edited label counts as checked, so it is never orange. Returns, per label, its
+    box, text, whether it is still orange and whether it was edited.
+    """
+    edits = edits or {}
     font = pymupdf.Font(fontfile=LABEL_FONT) if LABEL_FONT else pymupdf.Font("helv")
-    shape = page.new_shape()
-    for x, y, text, fs, _ in labels:
+    boxes = []
+    for i, (x, y, text, fs, uncertain) in enumerate(labels):
+        if i in edits:
+            text, uncertain = edits[i], False
+            if not LABEL_FONT:
+                text = text.replace("♯", "#").replace("♭", "b")
         w = font.text_length(text, fs)
-        shape.draw_rect(pymupdf.Rect(x - 0.06 * fs, y - fs * 0.45, x + w + 0.06 * fs, y + fs * 0.42))
+        rect = pymupdf.Rect(x - 0.06 * fs, y - fs * 0.45, x + w + 0.06 * fs, y + fs * 0.42)
+        boxes.append((rect, text, uncertain, i in edits, x, y, fs))
+    shape = page.new_shape()
+    for rect, text, *_ in boxes:
+        if text:
+            shape.draw_rect(rect)
     shape.finish(fill=(1, 1, 1), color=None, fill_opacity=0.82)
     shape.commit()
     # all labels in one go (one insert_text per label is slow on long scores); a Shape, unlike a
     # TextWriter, also gets the place right on pages whose visible part is cropped
     fontname = label_fontname(page)
     shape = page.new_shape()
-    for x, y, text, fs, uncertain in labels:
-        shape.insert_text((x, y + fs * 0.36), text, fontname=fontname, fontsize=fs,
-                          color=CHECK_COLOR if uncertain else rgb)
+    for _, text, uncertain, _, x, y, fs in boxes:
+        if text:
+            shape.insert_text((x, y + fs * 0.36), text, fontname=fontname, fontsize=fs,
+                              color=CHECK_COLOR if uncertain else rgb)
     shape.commit()
+    return [b[:4] for b in boxes]
+
+
+def checked(labels, edits):
+    """How many orange labels were edited in the app, and so are no longer in doubt."""
+    return sum(1 for i in edits if i < len(labels) and labels[i][4])
+
+
+def fraction(page, rect):
+    """A box on the page as fractions of the visible page, as the app places it."""
+    r, b = page.rect, rect * page.rotation_matrix
+    return [round((b.x0 - r.x0) / r.width, 5), round((b.y0 - r.y0) / r.height, 5),
+            round((b.x1 - r.x0) / r.width, 5), round((b.y1 - r.y0) / r.height, 5)]
+
+
+def label_boxes(page, boxes):
+    """Labels as the app shows them: box (see fraction()), text, orange, edited.
+
+    A label with no text (removed in the app) keeps a small box so it can be given one again."""
+    out = []
+    for rect, text, uncertain, edited in boxes:
+        if not text:
+            rect = pymupdf.Rect(rect.x0, rect.y0, rect.x0 + rect.height * 0.8, rect.y1)
+        out.append(fraction(page, rect) + [text, uncertain, edited])
+    return out
 
 
 def draw_legend(page, count):
-    """One line at the top of the first page explaining the orange marks."""
+    """One line at the top of the first page explaining the orange marks. Returns its box."""
     fontname = label_fontname(page)
     text = f"Orange = not sure, please check ({count} note{'s' if count != 1 else ''})"
-    page.insert_text((page.rect.x0 + 24, page.rect.y0 + 16), text, fontname=fontname, fontsize=7, color=CHECK_COLOR)
+    x, y, fs = page.rect.x0 + 24, page.rect.y0 + 16, 7
+    page.insert_text((x, y), text, fontname=fontname, fontsize=fs, color=CHECK_COLOR)
+    font = pymupdf.Font(fontfile=LABEL_FONT) if LABEL_FONT else pymupdf.Font("helv")
+    return pymupdf.Rect(x - 2, y - fs, x + font.text_length(text, fs) + 2, y + fs * 0.35)
 
 
-def annotate(src, dst, style="letters", color="red", fontsize=5.4):
+def annotate(src, dst, style="letters", color="red", fontsize=5.4, edits=None, labels=None, legend=True):
+    """Label every page of `src` into `dst`. Returns (notes, notes still marked orange).
+
+    `edits` holds the labels changed in the app, {page number: {label index: text}}; when
+    `labels` is a dict, it gets "pages", each page's labels as label_boxes() gives them, and
+    "legend", where the line explaining the orange marks is (None without one). `legend=False`
+    leaves that line out."""
+    edits = edits or {}
     doc = pymupdf.open(src)
     if doc.needs_pass:
         raise UnsupportedPDF("this PDF needs a password to open")
     names = SOLFEGE if style == "solfege" else LETTERS
-    rgb = COLORS.get(color, COLORS["red"])
+    rgb = color_rgb(color)
     total, unsure, carry = 0, 0, {}
     for page in doc:
         notes, dots = analyse_page(page, carry)
-        if not notes:
-            continue
-        total += len(notes)
-        unsure += sum(n.get("uncertain", False) for n in notes)
-        draw_labels(page, layout(notes, dots, fontsize, names), rgb)
+        boxes = []
+        if notes:
+            total += len(notes)
+            labelled, changed = layout(notes, dots, fontsize, names), edits.get(page.number, {})
+            boxes = draw_labels(page, labelled, rgb, changed)
+            unsure += sum(n.get("uncertain", False) for n in notes) - checked(labelled, changed)
+        if labels is not None:
+            labels.setdefault("pages", []).append(label_boxes(page, boxes))
     if total == 0:
         raise UnsupportedPDF("no notes found: this is probably a scanned score, or a PDF that draws its "
                              "notes as shapes rather than with a music font")
-    if unsure:
-        draw_legend(doc[0], unsure)
+    box = draw_legend(doc[0], unsure) if unsure and legend else None
+    if labels is not None:
+        labels["legend"] = box and fraction(doc[0], box)
     doc.save(dst, garbage=3, deflate=True)
     return total, unsure
 
@@ -812,7 +881,7 @@ def main():
     ap.add_argument("input", type=Path)
     ap.add_argument("output", type=Path, nargs="?")
     ap.add_argument("--style", choices=["letters", "solfege"], default="letters")
-    ap.add_argument("--color", choices=list(COLORS), default="red")
+    ap.add_argument("--color", type=color_arg, default="red", help="red, blue, black or a hex colour like #1a7f37")
     ap.add_argument("--size", type=float, default=5.4, help="label font size in points")
     a = ap.parse_args()
     out = a.output or a.input.with_name(a.input.stem + "_note_names.pdf")

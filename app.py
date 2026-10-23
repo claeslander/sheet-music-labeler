@@ -2,13 +2,15 @@
 
 Run: .venv/bin/python app.py   then open http://localhost:8765
 """
+import io
 import json
 import tempfile
 import uuid
+import zipfile
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, unquote, urlparse
 
 import pymupdf
 
@@ -30,14 +32,16 @@ class Handler(BaseHTTPRequestHandler):
         url = urlparse(self.path)
         if url.path == "/":
             return self.reply(200, "text/html; charset=utf-8", PAGE)
-        if url.path != "/page":
+        if url.path not in ("/page", "/labels"):
             return self.send_error(404)
-        # one page of a labelled PDF as a PNG, `w` pixels wide
+        # /labels: where every label is, as JSON; /page: one page as a PNG, `w` pixels wide
         q = {k: v[0] for k, v in parse_qs(url.query).items()}
-        data = RESULTS.get(q.get("id"))
-        if data is None:
+        result = RESULTS.get(q.get("id"))
+        if result is None:
             return self.send_error(404)
-        with pymupdf.open("pdf", data) as doc:
+        if url.path == "/labels":
+            return self.reply(200, "application/json", json.dumps(result["labels"]).encode())
+        with pymupdf.open("pdf", result["pdf"]) as doc:
             n = int(q.get("n", 0))
             if not 0 <= n < doc.page_count:
                 return self.send_error(404)
@@ -48,6 +52,8 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         url = urlparse(self.path)
+        if url.path == "/zip":
+            return self.zip()
         if url.path != "/annotate":
             return self.send_error(404)
         q = {k: v[0] for k, v in parse_qs(url.query).items()}
@@ -56,6 +62,11 @@ class Handler(BaseHTTPRequestHandler):
         if ext not in ("pdf", "png", "jpg", "jpeg", "tif", "tiff", "bmp", "gif", "webp"):
             return self.error("only PDF and image files (PNG, JPG, TIFF, BMP, GIF, WebP) are supported")
         args = (q.get("style", "letters"), q.get("color", "red"), float(q.get("size", 5.4)))
+        # labels changed by hand: {"page": {"label index": "text"}}
+        edits = {int(p): {int(i): str(t)[:12] for i, t in e.items()}
+                 for p, e in json.loads(unquote(self.headers.get("X-Edits") or "{}")).items()}
+        labels = {}
+        legend = q.get("legend") != "0"  # the line explaining the orange marks
         with tempfile.TemporaryDirectory() as tmp:
             src, dst = Path(tmp, "in." + ext), Path(tmp, "out.pdf")
             src.write_bytes(data)
@@ -63,10 +74,10 @@ class Handler(BaseHTTPRequestHandler):
                 if q.get("mode") == "omr":
                     if omr_label is None:
                         return self.error("the OMR model (homr) is not installed")
-                    n, ok = omr_label.annotate(src, dst, *args, progress=lambda s: None)
+                    n, ok = omr_label.annotate(src, dst, *args, progress=lambda s: None, edits=edits, labels=labels, legend=legend)
                     headers = {"X-Notes": str(n), "X-Confirmed": str(ok), "X-Mode": "omr"}
                 else:
-                    n, unsure = note_names.annotate(src, dst, *args)
+                    n, unsure = note_names.annotate(src, dst, *args, edits=edits, labels=labels, legend=legend)
                     headers = {"X-Notes": str(n), "X-Confirmed": str(n - unsure), "X-Mode": "exact"}
             except note_names.UnsupportedPDF as e:
                 scanned = q.get("mode") != "omr" and omr_label is not None
@@ -77,11 +88,28 @@ class Handler(BaseHTTPRequestHandler):
             with pymupdf.open("pdf", out) as doc:
                 headers["X-Pages"] = ",".join(f"{p.rect.width:.1f}x{p.rect.height:.1f}" for p in doc)
             key = uuid.uuid4().hex[:12]
-            RESULTS[key] = out
-            for old in list(RESULTS)[:-5]:
+            RESULTS[key] = {"pdf": out, "labels": labels}
+            for old in list(RESULTS)[:-60]:
                 del RESULTS[old]
             headers["X-Id"] = key
             self.reply(200, "application/pdf", out, headers)
+
+    def zip(self):
+        """Several labelled PDFs in one zip: body is [{"id": ..., "name": ...}, ...]."""
+        files = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))) or b"[]")
+        buf, used = io.BytesIO(), set()
+        with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
+            for f in files:
+                result = RESULTS.get(str(f.get("id")))
+                if result is None:
+                    continue
+                stem = Path(str(f.get("name", "score"))).name.rsplit(".", 1)[0] + "_note_names"
+                name, n = stem + ".pdf", 2
+                while name in used:
+                    name, n = f"{stem} ({n}).pdf", n + 1
+                used.add(name)
+                z.writestr(name, result["pdf"])
+        self.reply(200, "application/zip", buf.getvalue())
 
     def error(self, message, **extra):
         self.reply(422, "application/json", json.dumps({"error": message, **extra}).encode())

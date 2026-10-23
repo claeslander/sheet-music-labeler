@@ -7,21 +7,39 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
-  :root {
-    --side: #000000; --card: #111111; --edge: #262626; --edge2: #333333;
-    --ink: #ffffff; --soft: #d4d4d4; --muted: #a3a3a3; --stage: #ededed;
+  /* colour contexts: every control takes its colours from the nearest .dark or .light */
+  .dark {
+    --bg: #000000; --card: #111111; --edge: #262626; --edge2: #333333;
+    --ink: #ffffff; --soft: #d4d4d4; --muted: #a3a3a3; --inv: #000000; --warn: #ff9a3d;
+    background: var(--bg); color: var(--ink);
   }
+  .light, .stage {
+    --bg: #ffffff; --card: #f5f5f5; --edge: #e3e3e3; --edge2: #cccccc;
+    --ink: #000000; --soft: #404040; --muted: #666666; --inv: #ffffff; --warn: #b45309;
+    background: var(--bg); color: var(--ink);
+  }
+  .stage { background: #ededed; }
   * { box-sizing: border-box; }
   html, body { height: 100%; margin: 0; }
   body {
-    background: var(--stage); color: var(--ink);
     font: 15px/1.45 Manrope, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-    display: grid; grid-template-columns: 344px 1fr;
+    display: flex; flex-direction: column; background: #fff; color: #000;
   }
-  aside {
-    background: var(--side); padding: 28px 26px; display: flex; flex-direction: column; gap: 22px; overflow-y: auto;
-  }
-  h1 { font-size: 19px; font-weight: 800; letter-spacing: -0.01em; margin: 0; }
+  button { font-family: inherit; }
+
+  #app { flex: 1; min-height: 0; position: relative; }
+  .screen { position: absolute; inset: 0; display: none; }
+  body[data-screen="home"] .home { display: flex; }
+  body[data-screen="score"] .work { display: flex; }
+
+  /* what is shown depends on the state */
+  body:not(.has-scores) [data-when="scores"], body:not(.has-result) [data-when="result"],
+  body:not(.several) [data-when="several"] { display: none !important; }
+  [data-slot] { min-width: 0; }
+  #parts { display: none; }
+
+  /* the controls */
+  #brand { font-size: 19px; font-weight: 800; letter-spacing: -0.01em; margin: 0; }
   #drop {
     border: 1.5px dashed var(--edge2); border-radius: 12px; background: var(--card);
     padding: 18px 16px; text-align: center; cursor: pointer; transition: border-color .15s;
@@ -30,89 +48,268 @@
   #drop svg { width: 30px; height: 30px; color: var(--muted); }
   #drop .big { font-weight: 700; margin-top: 8px; }
   #drop .small { color: var(--muted); font-size: 13px; }
-  #drop .file { margin-top: 10px; font-size: 13.5px; font-weight: 600; word-break: break-all; }
-  #drop .file:empty { display: none; }
-  label.h { display: block; font-size: 11.5px; font-weight: 700; text-transform: uppercase;
-            letter-spacing: .09em; color: var(--muted); margin-bottom: 10px; }
+  label.h, .h { display: block; font-size: 11.5px; font-weight: 700; text-transform: uppercase;
+                letter-spacing: .09em; color: var(--muted); margin-bottom: 10px; }
   .seg { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 4px; border-radius: 12px;
          background: var(--card); border: 1px solid var(--edge); }
-  .seg button { min-height: 52px; border: 0; border-radius: 9px; background: transparent; color: var(--ink);
-                font: 700 15px/1.2 inherit; font-family: inherit; cursor: pointer; }
-  .seg button.on { background: var(--ink); color: var(--side); }
-  .seg small { display: block; font-size: 11.5px; font-weight: 500; color: var(--muted); margin-top: 2px; }
-  .seg button.on small { color: #525252; }
+  .seg button { min-height: 52px; padding: 0 12px; border: 0; border-radius: 9px; background: transparent;
+                color: var(--ink); font-size: 15px; font-weight: 700; line-height: 1.2; cursor: pointer; }
+  .seg button.on { background: var(--ink); color: var(--inv); }
+  .seg small { display: block; font-size: 11.5px; font-weight: 500; opacity: .65; margin-top: 2px; }
   .swatches { display: flex; gap: 10px; }
   .swatches button {
-    width: 44px; height: 44px; border-radius: 50%; border: 3px solid var(--side);
+    width: 44px; height: 44px; border-radius: 50%; border: 3px solid var(--bg);
     outline: 1px solid var(--edge2); cursor: pointer; padding: 0;
   }
   .swatches button.on { outline: 2px solid var(--ink); }
+  .swatches .custom { background: conic-gradient(#e5484d, #f5a524, #f2e14c, #3fb950, #2f81f7, #8957e5, #e5484d); }
+  #colour { position: relative; }
+  .cpop {
+    position: absolute; left: 50%; bottom: calc(100% + 14px); transform: translateX(-50%); z-index: 6;
+    display: flex; gap: 8px; align-items: center; padding: 8px; border-radius: 12px; border: 1px solid var(--edge);
+    box-shadow: 0 12px 40px rgba(0,0,0,.3);
+  }
+  .cpop[hidden] { display: none; }
+  #cpick { width: 42px; height: 36px; padding: 0; border: 1px solid var(--edge2); border-radius: 8px; background: none; cursor: pointer; }
+  #chex {
+    width: 96px; height: 36px; padding: 0 10px; border: 1px solid var(--edge2); border-radius: 8px; background: var(--card);
+    color: var(--ink); font: inherit; font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; text-transform: lowercase;
+  }
+  #chex:focus { outline: 2px solid var(--ink); outline-offset: -1px; }
+  #chex.bad { border-color: #e5484d; }
   input[type=range] { width: 100%; accent-color: var(--ink); }
   .row { display: flex; justify-content: space-between; align-items: baseline; }
-  .row label.h { margin-bottom: 10px; }
   .row output { font-variant-numeric: tabular-nums; color: var(--soft); font-size: 13px; }
-  .grow { flex-grow: 1; }
   #status { font-size: 13.5px; color: var(--soft); }
-  #status:not(:empty) { padding: 16px; border-radius: 12px; background: var(--card); border: 1px solid var(--edge); }
+  #status:not(:empty) { padding: 14px 16px; border-radius: 12px; background: var(--card); border: 1px solid var(--edge); }
   #status.err { color: var(--ink); font-weight: 600; border-color: var(--ink); }
   #status code { color: var(--ink); }
-  #download {
-    min-height: 50px; border-radius: 12px; background: var(--ink); color: var(--side);
-    font-weight: 700; text-decoration: none; display: flex; align-items: center; justify-content: center; gap: 10px;
+  #status .warn { color: var(--warn); }
+  #download, #downloadAll, .btn {
+    min-height: 50px; padding: 0 20px; border: 0; border-radius: 12px; background: var(--ink); color: var(--inv);
+    font-size: 15px; font-weight: 700; text-decoration: none; cursor: pointer; white-space: nowrap;
+    display: flex; align-items: center; justify-content: center; gap: 10px;
   }
-  #download:hover { opacity: .88; }
-  #download[aria-disabled=true] { opacity: .3; pointer-events: none; }
-  main { position: relative; min-width: 0; height: 100vh; display: flex; flex-direction: column; color: #000; }
-  .bar {
-    height: 64px; flex-shrink: 0; display: none; align-items: center; justify-content: space-between; gap: 16px;
-    padding: 0 28px; border-bottom: 1px solid #dddddd; background: #f7f7f7;
+  #downloadAll, .btn.ghost { background: transparent; color: var(--ink); border: 1px solid var(--edge2); }
+  #download:hover, #downloadAll:hover, .btn:hover { opacity: .88; }
+  #download[aria-disabled=true], #downloadAll:disabled, .btn:disabled { opacity: .3; pointer-events: none; }
+  #picker { display: flex; align-items: center; gap: 6px; }
+  #pick {
+    max-width: 170px; height: 42px; padding: 0 30px 0 12px; border: 1px solid var(--edge2); border-radius: 10px;
+    background: var(--bg) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-width='2.5' stroke-linecap='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E") no-repeat right 10px center;
+    color: var(--ink); font: inherit; font-size: 14px; font-weight: 600; appearance: none; cursor: pointer; text-overflow: ellipsis;
   }
-  .bar .title { font-size: 14px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .bar .nav { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
-  .bar button {
-    width: 44px; height: 44px; border-radius: 10px; border: 1px solid #dddddd; background: #fff; color: #000;
-    cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0;
+  #pick:hover, #add:hover, #home:hover { border-color: var(--ink); }
+  #add, #home.icon { width: 42px; height: 42px; padding: 0; flex-shrink: 0; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .dot.warn { background: #e07000; }
+  .dot.err { background: transparent; border: 2px solid currentColor; }
+  #nav { display: flex; align-items: center; gap: 6px; }
+  #nav button {
+    width: 44px; height: 44px; padding: 0; border: 1px solid var(--edge2); border-radius: 10px;
+    background: transparent; color: var(--ink); cursor: pointer; display: flex; align-items: center; justify-content: center;
   }
-  .bar button:hover { border-color: #000; }
-  .bar button:disabled { opacity: .35; cursor: default; border-color: #dddddd; }
-  #pageNo { min-width: 92px; text-align: center; font-size: 13.5px; color: #404040; font-variant-numeric: tabular-nums; }
-  #view { flex-grow: 1; overflow-y: auto; display: none; flex-direction: column; align-items: center; gap: 28px; padding: 32px 24px 48px; }
-  #view img {
-    display: block; width: 100%; max-width: 880px; height: auto; background: #fff; border-radius: 4px;
-    box-shadow: 0 1px 2px rgba(0,0,0,.08), 0 12px 40px rgba(0,0,0,.12);
-  }
-  main.ready .bar, main.ready #view { display: flex; }
-  main.ready .empty { display: none; }
-  .empty {
-    position: absolute; inset: 0; display: grid; place-items: center; color: #5e5e5e; text-align: center; padding: 24px;
-  }
-  .empty .staff { display: block; width: 120px; height: 56px; margin: 0 auto 4px; color: #000; opacity: .2; }
-  .spinner { width: 16px; height: 16px; border: 2px solid var(--edge2); border-top-color: var(--ink);
-             border-radius: 50%; display: inline-block; vertical-align: -3px; margin-right: 8px; animation: spin .8s linear infinite; }
+  #nav button:hover { border-color: var(--ink); }
+  #nav button:disabled { opacity: .35; cursor: default; border-color: var(--edge2); }
+  #pageNo { min-width: 92px; text-align: center; font-size: 13.5px; color: var(--soft); font-variant-numeric: tabular-nums; }
+  .spinner { width: 14px; height: 14px; border: 2px solid var(--edge2); border-top-color: var(--ink); flex-shrink: 0;
+             border-radius: 50%; display: inline-block; vertical-align: -2px; margin-right: 8px; animation: spin .8s linear infinite; }
+  #list .spinner { margin: 0; }
   @keyframes spin { to { transform: rotate(360deg); } }
-  @media (max-width: 760px) {
-    body { grid-template-columns: 1fr; grid-template-rows: auto 70vh; }
-    aside { padding: 20px 16px; }
-    main { height: 70vh; }
-    .grow { display: none; }
+
+  /* the score */
+  [data-slot="view"] { flex: 1; min-height: 0; display: flex; }
+  #view { position: relative; flex: 1; min-width: 0; overflow-y: auto; display: flex; flex-direction: column; align-items: center;
+          gap: 28px; padding: 32px 24px 48px; }
+  .pg { position: relative; width: 100%; max-width: 880px; flex-shrink: 0; }
+  .pg img {
+    display: block; width: 100%; height: auto; background: #fff; border-radius: 4px;
+    box-shadow: 0 1px 2px rgba(0,0,0,.08), 0 12px 40px rgba(0,0,0,.12); transition: opacity .2s;
+  }
+  body.busy .pg img { opacity: .5; }
+  .hits { position: absolute; inset: 0; }
+  .hit {
+    position: absolute; box-sizing: content-box; padding: 3px; margin: -3px; border: 0; border-radius: 3px;
+    background: transparent; cursor: pointer;
+  }
+  .hit:hover, .hit.on { outline: 1.5px solid #000; background: rgba(0,0,0,.06); }
+  .hit.edited { outline: 1px dashed rgba(0,0,0,.55); }
+  .placeholder { margin: auto; padding: 24px; text-align: center; color: #5e5e5e; }
+  .placeholder .staff { display: block; width: 120px; height: 56px; margin: 0 auto 4px; color: #000; opacity: .2; }
+
+  /* editing a name in place */
+  .field {
+    position: absolute; z-index: 5; margin: 0; padding: 0 3px; border: 0; border-radius: 3px; background: #fff;
+    outline: 1.5px solid #000; box-shadow: 0 4px 16px rgba(0,0,0,.18);
+    font-family: "DejaVu Sans", Verdana, sans-serif; font-weight: 600; line-height: 1;
+  }
+  .palette {
+    position: absolute; z-index: 6; padding: 5px; border-radius: 10px; white-space: nowrap;
+    box-shadow: 0 6px 20px rgba(0,0,0,.25); display: flex; gap: 3px; align-items: center;
+  }
+  .palette button {
+    min-width: 30px; height: 30px; padding: 0 6px; border: 0; border-radius: 7px; background: transparent;
+    color: var(--ink); font-size: 13.5px; font-weight: 700; cursor: pointer; display: grid; place-items: center;
+  }
+  .palette button:hover { background: var(--card); outline: 1px solid var(--edge2); }
+  .palette button.on { background: var(--ink); color: var(--inv); }
+  .palette .acc { font-size: 17px; font-weight: 500; }
+  .palette .sep { width: 1px; height: 20px; margin: 0 3px; background: var(--edge2); }
+  .palette .ok { background: var(--ink); color: var(--inv); }
+  .palette .ok:hover { background: var(--ink); opacity: .85; }
+  .pending {
+    position: absolute; z-index: 4; padding: 0 1px; background: rgba(255,255,255,.95); line-height: 1; pointer-events: none;
+    font-family: "DejaVu Sans", Verdana, sans-serif; white-space: nowrap;
+  }
+  .legend-hit { position: absolute; border: 0; border-radius: 3px; background: transparent; cursor: pointer; padding: 0; }
+  .legend-hit span {
+    position: absolute; left: calc(100% + 8px); top: 50%; transform: translateY(-50%); display: none;
+    padding: 4px 9px; border-radius: 7px; background: #000; color: #fff; font-size: 12px; font-weight: 700; white-space: nowrap;
+  }
+  .legend-hit:hover, .legend-hit:focus-visible { outline: 1.5px solid #000; background: rgba(0,0,0,.05); }
+  .legend-hit:hover span, .legend-hit:focus-visible span { display: block; }
+  #status .relegend { padding: 0; border: 0; background: none; color: var(--ink);
+                      font: inherit; font-weight: 700; text-decoration: underline; cursor: pointer; }
+
+  /* small versions of the controls, for the bar */
+  .compact #names label.h, .compact #colour label.h, .compact #sizing label.h { display: none; }
+  .compact #sizing { display: flex; align-items: center; gap: 10px; }
+  .compact #sizing .row { display: contents; }
+  .compact #sizing input { width: 90px; }
+  .compact #sizing output { order: 2; min-width: 44px; }
+  .compact .seg { padding: 3px; border-radius: 10px; }
+  .compact .seg button { min-height: 38px; font-size: 14px; border-radius: 8px; }
+  .compact .seg small { display: none; }
+  .compact .swatches { gap: 6px; }
+  .compact .swatches button { width: 30px; height: 30px; border-width: 2px; }
+  .compact #download, .compact #downloadAll, .compact .btn { min-height: 42px; padding: 0 16px; font-size: 14px; border-radius: 10px; }
+  .compact .long { display: none; }
+  .dl-wrap { position: relative; }
+  .dlmenu {
+    position: absolute; right: 0; bottom: calc(100% + 14px); z-index: 6; min-width: 250px; padding: 6px; border-radius: 12px;
+    border: 1px solid var(--edge); box-shadow: 0 12px 40px rgba(0,0,0,.3); display: flex; flex-direction: column; gap: 2px;
+  }
+  .dlmenu button {
+    min-height: 42px; padding: 0 12px; border: 0; border-radius: 8px; background: transparent; color: var(--ink);
+    font-size: 14px; font-weight: 600; text-align: left; cursor: pointer; display: flex; flex-direction: column; justify-content: center;
+  }
+  .dlmenu button:hover, .dlmenu button:focus-visible { background: var(--card); outline: none; }
+  .dlmenu button:disabled { opacity: .4; cursor: default; }
+  .dlmenu small { max-width: 280px; font-size: 12px; font-weight: 500; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .compact #nav button { width: 38px; height: 38px; }
+  .compact #pageNo { min-width: 52px; }
+  .compact #status:not(:empty) { padding: 0 4px; border: 0; background: none; white-space: nowrap; font-size: 13px; }
+  .compact #status.err { font-weight: 700; }
+
+  /* the upload screen */
+  .home { overflow-y: auto; justify-content: center; padding: 48px 24px; }
+  .home-inner { width: min(620px, 100%); margin: auto 0; display: flex; flex-direction: column; gap: 28px; }
+  .home #brand { font-size: 44px; letter-spacing: -0.02em; text-align: center; }
+  .home #drop { padding: 56px 32px; border-radius: 20px; }
+  .home #drop svg { width: 44px; height: 44px; }
+  .home #drop .big { font-size: 20px; margin-top: 14px; }
+  .home #drop .small { font-size: 14px; }
+  body.has-scores .home #drop { padding: 28px 24px; }
+  #list { list-style: none; margin: 0; padding: 0; border: 1px solid var(--edge); border-radius: 14px; overflow: hidden; }
+  #list li { display: flex; align-items: center; gap: 8px; padding: 6px 8px 6px 6px; }
+  #list li + li { border-top: 1px solid var(--edge); }
+  #list .open {
+    flex: 1; min-width: 0; min-height: 48px; display: flex; align-items: center; gap: 12px; padding: 4px 10px;
+    border: 0; border-radius: 9px; background: none; color: inherit; text-align: left; cursor: pointer;
+  }
+  #list .open:hover { background: var(--card); }
+  #list .ico { width: 16px; display: grid; place-items: center; flex-shrink: 0; }
+  #list .txt { min-width: 0; display: flex; flex-direction: column; }
+  #list .nm { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #list .meta { font-size: 13px; color: var(--muted); }
+  #list .meta .warn { color: var(--warn); font-weight: 600; }
+  #list .rm {
+    width: 36px; height: 36px; flex-shrink: 0; border: 0; border-radius: 9px; background: none; color: var(--muted);
+    cursor: pointer; display: grid; place-items: center;
+  }
+  #list .rm:hover { background: var(--card); color: var(--ink); }
+  .home .acts { display: flex; justify-content: flex-end; gap: 10px; flex-wrap: wrap; }
+
+  /* the score screen: the page fills the window, one bar at the bottom */
+  .work .stage-wrap { position: absolute; inset: 0; display: flex; }
+  .work #view { padding: 32px 24px 130px; }
+  .work .dock {
+    position: absolute; left: 50%; bottom: 20px; transform: translateX(-50%); z-index: 3;
+    width: max-content; max-width: calc(100% - 32px); display: flex; align-items: center; justify-content: center;
+    gap: 10px; padding: 8px 10px; border-radius: 18px; box-shadow: 0 12px 40px rgba(0,0,0,.3);
+  }
+  .work .sep { width: 1px; height: 28px; background: var(--edge2); }
+
+  /* the bar stays one line: on narrow windows the less important parts give way */
+  .work .dock > * { flex-shrink: 0; }
+  .work .dock [data-slot="picker"], .work .dock [data-slot="status"] { flex-shrink: 1; min-width: 0; }
+  .compact #picker { min-width: 0; }
+  .compact #pick { min-width: 90px; flex-shrink: 1; }
+  .compact #status { overflow: hidden; text-overflow: ellipsis; }
+  @media (max-width: 1250px) {
+    .compact #sizing output { display: none; }
+    .compact #sizing input { width: 70px; }
+    .work .dock [data-slot="status"] { display: none; }
+  }
+  @media (max-width: 1100px) {
+    .work .dock .sep { display: none; }
+  }
+  @media (max-width: 900px) {
+    .work .dock [data-slot="nav"], .work .dock [data-slot="sizing"] { display: none !important; }
   }
 </style>
 </head>
 <body>
-<aside>
-  <h1>Sheet Music Labeler</h1>
+<div id="app">
+  <!-- the upload screen -->
+  <section class="screen home light">
+    <div class="home-inner">
+      <div data-slot="brand"></div>
+      <div data-slot="drop"></div>
+      <div data-when="scores">
+        <div class="h" id="listHead"></div>
+        <div data-slot="list"></div>
+      </div>
+      <div class="acts" data-when="several"><div data-slot="downloadAll"></div></div>
+    </div>
+  </section>
 
-  <div id="drop" tabindex="0">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+  <!-- the score: it fills the window, everything else is in one bar at the bottom -->
+  <section class="screen work">
+    <div class="stage-wrap"><div data-slot="view"></div></div>
+    <div class="dock dark compact">
+      <div data-slot="home"></div><div data-slot="picker"></div><div data-slot="status"></div><span class="sep"></span>
+      <div data-slot="names"></div><div data-slot="colour"></div><div data-slot="sizing"></div>
+      <span class="sep" data-when="result"></span><div data-slot="nav" data-when="result"></div>
+      <span class="sep"></span><div class="dl-wrap" data-slot="download"></div>
+    </div>
+  </section>
+</div>
+
+<!-- the controls; each screen moves them into its own slots -->
+<div id="parts">
+  <h1 id="brand">Sheet Music Labeler</h1>
+
+  <div id="drop" tabindex="0" role="button" aria-label="Choose scores">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
       <path d="M12 16V4M7 9l5-5 5 5"/><path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/>
     </svg>
-    <div class="big">Drop a score PDF here</div>
-    <div class="small">or click to choose a file</div>
-    <div class="file" id="fname"></div>
-    <input type="file" id="file" accept="application/pdf,image/png,image/jpeg,image/tiff,image/bmp,image/gif,image/webp" hidden>
+    <div class="big">Drop your scores here</div>
+    <div class="small">one or several at once, or click to choose</div>
   </div>
 
-  <div>
+  <ul id="list"></ul>
+
+  <button id="home" class="btn ghost icon" title="All scores (Esc)" aria-label="All scores">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>
+  </button>
+
+  <div id="picker">
+    <select id="pick" aria-label="Score" data-when="several"></select>
+    <button id="add" class="btn ghost" title="Add scores" aria-label="Add scores"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
+  </div>
+
+  <div id="names">
     <label class="h">Names</label>
     <div class="seg" id="style">
       <button data-v="letters" class="on">C D E<small>letters</small></button>
@@ -120,162 +317,559 @@
     </div>
   </div>
 
-  <div>
+  <div id="colour">
     <label class="h">Colour</label>
     <div class="swatches" id="color">
       <button data-v="red" class="on" style="background:#c7141f" aria-label="red"></button>
       <button data-v="blue" style="background:#0d4dbf" aria-label="blue"></button>
-      <button data-v="green" style="background:#008040" aria-label="green"></button>
       <button data-v="black" style="background:#2b2b2b" aria-label="black"></button>
+      <button data-custom class="custom" aria-label="Other colour" title="Other colour"></button>
+    </div>
+    <div class="cpop dark" id="cpop" hidden>
+      <input type="color" id="cpick" value="#7a3fd6" aria-label="Pick a colour">
+      <input type="text" id="chex" maxlength="7" placeholder="#7a3fd6" spellcheck="false" aria-label="Hex colour">
     </div>
   </div>
 
-  <div>
+  <div id="sizing">
     <div class="row"><label class="h" for="size">Label size</label><output id="sizeOut">5.4 pt</output></div>
-    <input type="range" id="size" min="3.5" max="7" step="0.1" value="5.4">
+    <input type="range" id="size" min="3.5" max="7" step="0.1" value="5.4" aria-label="Label size">
   </div>
 
-  <div class="grow"></div>
-  <div id="status"></div>
+  <div id="status" role="status"></div>
+
   <a id="download" aria-disabled="true" download>
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v12M7 11l5 5 5-5"/><path d="M4 20h16"/></svg>
-    Download labelled PDF
+    <span>Download<span class="long"> labelled PDF</span></span>
   </a>
-</aside>
 
-<main id="main">
-  <div class="bar">
-    <div class="title" id="title"></div>
-    <div class="nav">
-      <button id="prev" aria-label="Previous page"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></button>
-      <span id="pageNo"></span>
-      <button id="next" aria-label="Next page"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
-    </div>
+  <button id="downloadAll">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v10M8 10l4 4 4-4"/><path d="M4 17v2a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-2"/></svg>
+    <span id="downloadAllText">Download all</span>
+  </button>
+
+  <div id="nav">
+    <button id="prev" aria-label="Previous page"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></button>
+    <span id="pageNo"></span>
+    <button id="next" aria-label="Next page"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
   </div>
-  <div class="empty" id="empty"><div><svg class="staff" viewBox="0 0 120 56" aria-hidden="true"><g stroke="currentColor" stroke-width="1.4"><path d="M4 12h112M4 20h112M4 28h112M4 36h112M4 44h112"/><path d="M45.5 38V12M75.5 30V4M105.5 34V8"/></g><g fill="currentColor"><ellipse cx="40" cy="40" rx="6.2" ry="4.4" transform="rotate(-20 40 40)"/><ellipse cx="70" cy="32" rx="6.2" ry="4.4" transform="rotate(-20 70 32)"/><ellipse cx="100" cy="36" rx="6.2" ry="4.4" transform="rotate(-20 100 36)"/></g></svg><p>Your labelled score will appear here.</p></div></div>
-  <div id="view" aria-label="Labelled score"></div>
-</main>
+
+  <div id="view" class="stage" aria-label="Labelled score"></div>
+</div>
+<input type="file" id="file" multiple accept="application/pdf,image/png,image/jpeg,image/tiff,image/bmp,image/gif,image/webp" hidden>
 
 <script>
 const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 const opts = { style: "letters", color: "red", size: "5.4" };
-let pdf = null, name = "", url = null, busy = 0;
+const NAMES = { letters: ["C", "D", "E", "F", "G", "A", "B"], solfege: ["Do", "Re", "Mi", "Fa", "Sol", "La", "Si"] };
+const PARTS = ["brand", "drop", "list", "home", "picker", "names", "colour", "sizing", "status", "download", "downloadAll", "nav", "view"];
+const scores = [];  // { name, ext, data, mode, state, result, resultKey, url, notes, unsure, omr, msg, edits, scroll }
+let active = null, screen = "home", working = false;
 
+// ---- screens ----
+const visible = (el) => (el.checkVisibility ? el.checkVisibility() : el.offsetParent !== null);
+
+// move every control into the first visible slot on the screen
+function place() {
+  const view = $("view"), scroll = view.scrollTop;
+  for (const id of PARTS) {
+    const slot = [...document.querySelectorAll(`[data-slot="${id}"]`)].find(visible) || $("parts");
+    if ($(id).parentElement !== slot) slot.appendChild($(id));
+  }
+  view.scrollTop = scroll;
+}
+
+function open(s) {
+  if (active && active !== s && screen === "score") active.scroll = $("view").scrollTop;
+  closeEdit(true);
+  const switched = active !== s;
+  active = s; screen = "score";
+  update();
+  if (switched) $("view").scrollTop = s.scroll || 0;
+  pump();
+}
+function goHome() {
+  if (active && screen === "score") active.scroll = $("view").scrollTop;
+  closeEdit(true);
+  screen = "home";
+  update();
+}
+$("home").addEventListener("click", goHome);
+
+// ---- settings ----
 function pick(groupId, key) {
   $(groupId).addEventListener("click", (e) => {
     const b = e.target.closest("button"); if (!b) return;
     [...$(groupId).children].forEach((c) => c.classList.toggle("on", c === b));
-    opts[key] = b.dataset.v; run();
+    opts[key] = b.dataset.v; update(); pump();
   });
 }
-pick("style", "style"); pick("color", "color");
+pick("style", "style");
+
+// colour: three fixed ones, and a picker (also takes a hex code) in the last circle
+const HEX = /^#?([0-9a-f]{6})$/i;
+function setColor(c) {
+  opts.color = c;
+  const custom = c.startsWith("#");
+  [...$("color").children].forEach((b) => b.classList.toggle("on", custom ? "custom" in b.dataset : b.dataset.v === c));
+  if (custom) $("color").querySelector(".custom").style.background = c;
+  update(); pump();
+}
+$("color").addEventListener("click", (e) => {
+  const b = e.target.closest("button"); if (!b) return;
+  if (!("custom" in b.dataset)) { $("cpop").hidden = true; return setColor(b.dataset.v); }
+  const pop = $("cpop");
+  pop.hidden = !pop.hidden;
+  if (!pop.hidden) {
+    $("chex").value = opts.color.startsWith("#") ? opts.color : $("cpick").value;
+    $("chex").classList.remove("bad");
+    $("chex").focus(); $("chex").select();
+  }
+});
+// apply a colour as soon as it stops changing (dragging in the picker sends many)
+let colorTimer = 0;
+function soon(c) { clearTimeout(colorTimer); colorTimer = setTimeout(() => { if (c !== opts.color) setColor(c); }, 250); }
+$("cpick").addEventListener("input", (e) => { $("chex").value = e.target.value; $("chex").classList.remove("bad"); soon(e.target.value.toLowerCase()); });
+$("cpick").addEventListener("change", (e) => soon(e.target.value.toLowerCase()));
+$("chex").addEventListener("input", (e) => {
+  const m = e.target.value.trim().match(HEX);
+  e.target.classList.toggle("bad", !m && e.target.value.trim().length >= 6);
+  if (m) { $("cpick").value = "#" + m[1].toLowerCase(); soon("#" + m[1].toLowerCase()); }
+});
+$("chex").addEventListener("keydown", (e) => {
+  const m = e.target.value.trim().match(HEX);
+  if (e.key === "Enter") {
+    e.preventDefault();
+    if (!m) return e.target.classList.add("bad");
+    clearTimeout(colorTimer);
+    if ("#" + m[1].toLowerCase() !== opts.color) setColor("#" + m[1].toLowerCase());
+    $("cpop").hidden = true;
+  }
+  if (e.key === "Escape") { e.stopPropagation(); $("cpop").hidden = true; }
+});
+document.addEventListener("mousedown", (e) => { if (!$("cpop").hidden && !e.target.closest("#colour")) $("cpop").hidden = true; });
 $("size").addEventListener("input", (e) => { $("sizeOut").textContent = e.target.value + " pt"; });
-$("size").addEventListener("change", (e) => { opts.size = e.target.value; run(); });
+$("size").addEventListener("change", (e) => { opts.size = e.target.value; update(); pump(); });
 
-const drop = $("drop");
-drop.addEventListener("click", () => $("file").click());
-drop.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") $("file").click(); });
-$("file").addEventListener("change", (e) => load(e.target.files[0]));
+// ---- adding scores ----
+const drop = $("drop"), pickFiles = () => $("file").click();
+drop.addEventListener("click", pickFiles);
+drop.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); pickFiles(); } });
+$("file").addEventListener("change", (e) => { add(e.target.files); e.target.value = ""; });
 ["dragenter", "dragover"].forEach((t) => drop.addEventListener(t, (e) => { e.preventDefault(); drop.classList.add("over"); }));
-["dragleave", "drop"].forEach((t) => drop.addEventListener(t, (e) => { e.preventDefault(); drop.classList.remove("over"); }));
-drop.addEventListener("drop", (e) => load(e.dataTransfer.files[0]));
-// dropping anywhere else should not navigate away
+["dragleave", "drop"].forEach((t) => drop.addEventListener(t, () => drop.classList.remove("over")));
+// files dropped anywhere in the window are added
 window.addEventListener("dragover", (e) => e.preventDefault());
-window.addEventListener("drop", (e) => { e.preventDefault(); if (e.dataTransfer.files[0]) load(e.dataTransfer.files[0]); });
+window.addEventListener("drop", (e) => { e.preventDefault(); add(e.dataTransfer.files); });
 
-// the labelled score, drawn as page images by the server
-const view = $("view");
-let pages = [];
+async function add(files) {
+  files = [...(files || [])];
+  if (!files.length) return;
+  const added = [];
+  for (const f of files) {
+    added.push({ name: f.name, ext: (f.name.match(/\.(\w+)$/) || [, "pdf"])[1].toLowerCase(), data: await f.arrayBuffer(),
+                 mode: "exact", state: "queued", result: null, edits: {}, legend: true });
+  }
+  scores.push(...added);
+  open(added[0]);
+}
 
-function show(id, sizes) {
-  const keepScroll = view.scrollTop;
-  // image width in device pixels, rounded up so the browser can reuse cached pages
-  const w = Math.ceil(Math.min(view.clientWidth || 880, 880) * devicePixelRatio / 200) * 200;
-  view.replaceChildren(...sizes.split(",").map((s, i) => {
-    const [pw, ph] = s.split("x").map(Number);
-    const img = new Image();
-    img.loading = "lazy"; img.alt = "Page " + (i + 1);
-    img.style.aspectRatio = pw + " / " + ph;
-    img.src = `/page?id=${id}&n=${i}&w=${w}`;
-    return img;
-  }));
-  pages = [...view.children];
-  $("title").textContent = name.replace(/\.[^.]+$/, "");
-  $("main").classList.add("ready");
-  view.scrollTop = keepScroll;
+function remove(s) {
+  if (s.url) URL.revokeObjectURL(s.url);
+  scores.splice(scores.indexOf(s), 1);
+  if (active === s) { active = null; screen = "home"; }
+  update();
+}
+
+// ---- labelling, one score at a time, the one on screen first ----
+const want = (s) => JSON.stringify([opts, s.edits, s.legend]);
+const needs = (s) => s.state !== "busy" && s.state !== "error" && (!s.result || s.resultKey !== want(s));
+const next = () => (active && screen === "score" && needs(active) ? active : scores.find(needs));
+
+async function pump() {
+  if (working) return;
+  working = true;
+  for (let s; (s = next()); ) { await work(s); update(); }
+  working = false;
+}
+
+async function work(s) {
+  const key = want(s);
+  s.state = "busy"; update();
+  const q = new URLSearchParams({ ...opts, mode: s.mode, ext: s.ext, legend: s.legend ? "1" : "0" });
+  let res;
+  try {
+    res = await fetch("/annotate?" + q, { method: "POST", body: s.data, headers: {
+      "Content-Type": "application/octet-stream", "X-Edits": encodeURIComponent(JSON.stringify(s.edits)) } });
+  } catch (e) {
+    s.state = "error"; s.msg = "The app server is not running. Start it with <code>python app.py</code>.";
+    return;
+  }
+  if (!res.ok) {
+    const j = await res.json().catch(() => ({}));
+    if (j.scanned) { s.mode = "omr"; s.state = "queued"; return; }
+    s.state = "error"; s.msg = "Could not label this file: " + esc(j.error || res.statusText);
+    return;
+  }
+  const id = res.headers.get("X-Id");
+  const [blob, labels] = await Promise.all([res.blob(), fetch("/labels?id=" + id).then((r) => r.json())]);
+  if (s.url) URL.revokeObjectURL(s.url);
+  s.url = URL.createObjectURL(blob);
+  s.result = { id, sizes: res.headers.get("X-Pages"), labels };
+  s.resultKey = key;
+  s.notes = Number(res.headers.get("X-Notes"));
+  s.unsure = s.notes - Number(res.headers.get("X-Confirmed"));
+  s.omr = res.headers.get("X-Mode") === "omr";
+  s.state = "ready";
+}
+
+// ---- what the screen shows ----
+function waiting(s) {
+  if (s.state === "queued" && scores.some((o) => o.state === "busy")) return "Waiting for the other scores…";
+  return s.mode === "omr" ? "This is a scanned score: reading it with the local OMR model (about 25 s per page)…" : "Reading notes…";
+}
+
+// one short line for the bar; the longer explanation is in its tooltip
+function statusHtml(s) {
+  if (s.state === "error") return "Could not read this file";
+  if (s.state !== "ready") return `<span class="spinner"></span>` + (s.state === "queued" && scores.some((o) => o.state === "busy")
+    ? "Waiting…" : s.mode === "omr" ? "Reading the scan…" : "Reading…");
+  return `${s.notes.toLocaleString()} notes` + (s.unsure ? ` · <b class="warn">${s.unsure} to check</b>` : "")
+    + (s.unsure && !s.legend ? ' · <button class="relegend" title="Put the line explaining orange back on page 1">show line</button>' : "");
+}
+
+function statusTitle(s) {
+  if (s.state === "error") return s.msg.replace(/<[^>]+>/g, "");
+  if (s.state !== "ready") return s.mode === "omr" ? "Reading a scanned score with the local OMR model, about 25 s per page" : "";
+  const how = s.omr ? "Read from the scan. A few notes may be missing entirely." : "Read exactly from the PDF.";
+  const orange = !s.unsure ? "" : s.omr ? " Orange names: not sure, please check those."
+    : " Orange names: this score has no barlines there, so it is unclear whether an earlier accidental still applies.";
+  return how + orange + " Click a name in the score to change it" + (s.unsure && s.legend ? ", or the orange line on page 1 to remove it." : ".");
+}
+
+function meta(s) {
+  if (s.state === "error") return "could not be read";
+  if (s.state === "busy" && !s.result) return s.mode === "omr" ? "reading the scan…" : "reading…";
+  if (!s.result) return "waiting";
+  return `${s.notes.toLocaleString()} notes` + (s.unsure ? `, <span class="warn">${s.unsure} to check</span>` : "");
+}
+
+function icon(s) {
+  if (s.state === "error") return '<span class="dot err"></span>';
+  if (s.state !== "ready") return '<span class="spinner"></span>';
+  return s.unsure ? '<span class="dot warn"></span>' : "";
+}
+
+function update() {
+  const b = document.body, s = screen === "score" ? active : null;
+  b.dataset.screen = s ? "score" : "home";
+  b.classList.toggle("has-scores", scores.length > 0);
+  b.classList.toggle("several", scores.length > 1);
+  b.classList.toggle("has-result", !!(s && s.result));
+  b.classList.toggle("busy", !!(s && s.result && s.state !== "ready"));
+
+  // the score list on the upload screen
+  $("listHead").textContent = scores.length === 1 ? "1 score" : `${scores.length} scores`;
+  $("list").innerHTML = scores.map((x, i) => `<li><button class="open" data-i="${i}"><span class="ico">${icon(x)}</span>
+    <span class="txt"><span class="nm">${esc(x.name)}</span><span class="meta">${meta(x)}</span></span></button>
+    <button class="rm" data-rm="${i}" aria-label="Remove ${esc(x.name)}" title="Remove"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></li>`).join("");
+
+  // the score picker
+  $("pick").innerHTML = scores.map((x, i) => `<option value="${i}"${x === active ? " selected" : ""}>${esc(x.name.replace(/\.[^.]+$/, ""))}${x.state === "error" ? " (could not be read)" : x.state !== "ready" ? " (reading…)" : x.unsure ? ` (${x.unsure} to check)` : ""}</option>`).join("");
+
+  // status and downloads
+  const st = $("status");
+  st.innerHTML = s ? statusHtml(s) : "";
+  st.title = s ? statusTitle(s) : "";
+  st.classList.toggle("err", !!(s && s.state === "error"));
+  const dl = $("download"), ready = !!(s && s.state === "ready");
+  dl.setAttribute("aria-disabled", String(!ready));
+  if (ready) { dl.href = s.url; dl.download = s.name.replace(/\.[^.]+$/, "") + "_note_names.pdf"; }
+  const done = scores.filter((x) => x.state === "ready");
+  $("downloadAll").disabled = done.length === 0;
+  $("downloadAllText").textContent = done.length === scores.length ? `Download all (${scores.length})` : `Download ${done.length} of ${scores.length}`;
+
+  place();
+  render();
   current();
 }
 
+$("list").addEventListener("click", (e) => {
+  const rm = e.target.closest("[data-rm]"), o = e.target.closest(".open");
+  if (rm) remove(scores[Number(rm.dataset.rm)]);
+  else if (o) open(scores[Number(o.dataset.i)]);
+});
+$("pick").addEventListener("change", (e) => open(scores[Number(e.target.value)]));
+$("add").addEventListener("click", pickFiles);
+
+async function downloadAll() {
+  const files = scores.filter((x) => x.state === "ready").map((x) => ({ id: x.result.id, name: x.name }));
+  const res = await fetch("/zip", { method: "POST", body: JSON.stringify(files), headers: { "Content-Type": "application/json" } });
+  save(URL.createObjectURL(await res.blob()), "note_names.zip", true);
+}
+function save(href, name, revoke) {
+  const a = document.createElement("a");
+  a.href = href; a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  if (revoke) setTimeout(() => URL.revokeObjectURL(href), 10000);
+}
+$("downloadAll").addEventListener("click", downloadAll);
+
+// with several scores, Download asks: this one, or all of them?
+const menu = document.createElement("div");
+menu.className = "dlmenu dark";
+menu.setAttribute("role", "menu");
+function closeMenu() { menu.remove(); }
+$("download").addEventListener("click", (e) => {
+  if (scores.length < 2 || screen !== "score") return; // one score: just download it
+  e.preventDefault();
+  if (menu.isConnected) return closeMenu();
+  const done = scores.filter((x) => x.state === "ready").length;
+  menu.innerHTML = `<button role="menuitem" data-one>This score<small>${esc(active.name.replace(/\.[^.]+$/, ""))}_note_names.pdf</small></button>`
+    + `<button role="menuitem" data-all${done ? "" : " disabled"}>All ${scores.length} scores<small>one zip${done < scores.length ? `, ${done} ready so far` : ""}</small></button>`;
+  $("download").parentElement.appendChild(menu);
+  menu.querySelector("button").focus();
+});
+menu.addEventListener("click", (e) => {
+  const b = e.target.closest("button"); if (!b) return;
+  closeMenu();
+  if ("one" in b.dataset) save(active.url, $("download").download);
+  else downloadAll();
+});
+menu.addEventListener("keydown", (e) => { if (e.key === "Escape") { e.stopPropagation(); closeMenu(); $("download").focus(); } });
+document.addEventListener("mousedown", (e) => { if (menu.isConnected && !menu.contains(e.target) && !e.target.closest("#download")) closeMenu(); });
+
+
+// ---- the labelled score, drawn as page images by the server, with a button on every label ----
+const view = $("view");
+const STAFF = '<svg class="staff" viewBox="0 0 120 56" aria-hidden="true"><g stroke="currentColor" stroke-width="1.4"><path d="M4 12h112M4 20h112M4 28h112M4 36h112M4 44h112"/><path d="M45.5 38V12M75.5 30V4M105.5 34V8"/></g><g fill="currentColor"><ellipse cx="40" cy="40" rx="6.2" ry="4.4" transform="rotate(-20 40 40)"/><ellipse cx="70" cy="32" rx="6.2" ry="4.4" transform="rotate(-20 70 32)"/><ellipse cx="100" cy="36" rx="6.2" ry="4.4" transform="rotate(-20 100 36)"/></g></svg>';
+let pages = [], shown = null, shownScore = null, shownW = 0;
+
+function render() {
+  const s = screen === "score" ? active : null;
+  if (!s || !view.clientWidth) return;
+  if (!s.result) {
+    const html = s.state === "error" ? STAFF + `<p>${s.msg}</p>` : `<span class="spinner"></span>${waiting(s)}`;
+    if (view.dataset.ph !== html) { closeEdit(false); view.innerHTML = `<div class="placeholder">${html}</div>`; view.dataset.ph = html; }
+    pages = []; shown = null;
+    return;
+  }
+  // image width in device pixels, rounded up so the browser can reuse cached pages
+  const w = Math.ceil(Math.min(view.clientWidth, 880) * devicePixelRatio / 200) * 200;
+  if (shown === s.result && w <= shownW) return;
+  const sizes = s.result.sizes.split(","), src = (p) => `/page?id=${s.result.id}&n=${p}&w=${w}`;
+  const settled = s.resultKey === want(s);
+  if (shownScore === s && pages.length === sizes.length) {
+    // same score, new labels: swap the images and the click targets, keep the place and any name being typed
+    pages.forEach((pg, p) => {
+      pg.querySelector("img").src = src(p);
+      fillHits(pg, p, s.result);
+      if (settled) pg.querySelectorAll(".pending").forEach((x) => x.remove());
+    });
+  } else {
+    closeEdit(false);
+    view.replaceChildren(...sizes.map((size, p) => {
+      const [pw, ph] = size.split("x").map(Number);
+      const pg = document.createElement("div");
+      pg.className = "pg"; pg.dataset.p = p; pg.style.aspectRatio = pw + " / " + ph;
+      const img = new Image();
+      img.loading = "lazy"; img.alt = "Page " + (p + 1); img.src = src(p);
+      const hits = document.createElement("div");
+      hits.className = "hits";
+      pg.append(img, hits);
+      fillHits(pg, p, s.result);
+      return pg;
+    }));
+    view.dataset.ph = "";
+    pages = [...view.children];
+  }
+  shown = s.result; shownScore = s; shownW = w;
+}
+
+function fillHits(pg, p, result) {
+  const labels = result.labels.pages[p] || [];
+  const box = (x0, y0, x1, y1) => `left:${x0 * 100}%;top:${y0 * 100}%;width:${(x1 - x0) * 100}%;height:${(y1 - y0) * 100}%`;
+  pg.querySelector(".hits").innerHTML = labels.map(([x0, y0, x1, y1, text, , edited], i) =>
+    `<button class="hit${edited ? " edited" : ""}${editing && editing.p === p && editing.i === i ? " on" : ""}" data-i="${i}" aria-label="${esc(text || "no name")}, click to change" style="${box(x0, y0, x1, y1)}"></button>`).join("")
+    + (p === 0 && result.labels.legend ? `<button class="legend-hit" aria-label="Remove the orange line" style="${box(...result.labels.legend)}"><span>Remove this line</span></button>` : "");
+}
+
 function current() {
+  if (!pages.length) return 0;
   const top = view.getBoundingClientRect().top + view.clientHeight / 3;
   let n = pages.findIndex((p) => p.getBoundingClientRect().bottom > top);
   if (n < 0) n = pages.length - 1;
-  $("pageNo").textContent = `Page ${n + 1} of ${pages.length}`;
+  $("pageNo").textContent = `${n + 1} / ${pages.length}`;
+  $("pageNo").title = `Page ${n + 1} of ${pages.length}`;
   $("prev").disabled = n === 0; $("next").disabled = n === pages.length - 1;
   return n;
 }
 view.addEventListener("scroll", current);
-window.addEventListener("resize", current);
+window.addEventListener("resize", () => { render(); current(); });
 const go = (d) => { const p = pages[current() + d]; if (p) view.scrollTo({ top: p.offsetTop - 32, behavior: "smooth" }); };
 $("prev").addEventListener("click", () => go(-1));
 $("next").addEventListener("click", () => go(1));
+
+// ---- changing a name by hand, in place, like text ----
+const INK = { red: "#c7141f", blue: "#0d4dbf", black: "#111111" }, ORANGE = "#e66b00";
+const ink = () => INK[opts.color] || opts.color;
+const field = document.createElement("input");
+field.type = "text"; field.className = "field"; field.spellcheck = false; field.maxLength = 12;
+field.setAttribute("aria-label", "Note name");
+const hint = document.createElement("div");
+hint.className = "palette dark";
+hint.setAttribute("role", "toolbar");
+hint.setAttribute("aria-label", "Choose a name");
+let editing = null; // { p, i, orig, uncertain }
+
+// "f#" -> "F♯", "bb" -> "B♭", "sib" -> "Si♭"
+function tidy(t) {
+  t = t.trim().slice(0, 12).replace(/#/g, "♯");
+  const m = t.match(/^([A-Ga-g]|do|re|mi|fa|sol|la|si)(b{1,2})$/i);
+  if (m) t = m[1] + "♭".repeat(m[2].length);
+  return t.charAt(0).toUpperCase() + t.slice(1);
+}
+
+// where a label sits on its page, in pixels, and the font size that matches the PDF
+function spot(p, i) {
+  const pg = pages[p], [x0, y0, x1, y1] = active.result.labels.pages[p][i];
+  const W = pg.clientWidth, H = pg.clientHeight;
+  return { pg, x: x0 * W, y: y0 * H, w: (x1 - x0) * W, h: (y1 - y0) * H, fs: ((y1 - y0) * H) / 0.87 };
+}
+
+const measure = document.createElement("canvas").getContext("2d");
+function sizeField() {
+  measure.font = `600 ${field.style.fontSize} "DejaVu Sans", Verdana, sans-serif`;
+  field.style.width = Math.max(Number(field.dataset.min), measure.measureText(field.value || " ").width + 10) + "px";
+}
+
+function startEdit(p, i) {
+  const s = active, lab = s.result && s.result.labels.pages[p] && s.result.labels.pages[p][i];
+  if (!lab) return;
+  closeEdit(true);
+  const [, , , , text, uncertain, edited] = lab, at = spot(p, i);
+  editing = { p, i, orig: text, uncertain };
+  // big enough to read and type in, centred on the label
+  const fs = Math.max(at.fs, 15), h = fs * 1.35;
+  Object.assign(field.style, { left: at.x - 3 + "px", top: at.y + at.h / 2 - h / 2 + "px", height: h + "px",
+                               fontSize: fs + "px", color: uncertain ? ORANGE : ink() });
+  field.dataset.min = at.w + 6;
+  field.value = text;
+  sizeField();
+  // next to the name: the seven names in the chosen style, then flat, natural, sharp
+  const icon = (d) => `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${d}"/></svg>`;
+  hint.innerHTML = NAMES[opts.style].map((n) => `<button data-name="${n}">${n}</button>`).join("")
+    + '<span class="sep"></span><button class="acc" data-acc="♭" title="Flat" aria-label="flat">♭</button>'
+    + '<button class="acc" data-acc="" title="Natural (no sign)" aria-label="natural">♮</button>'
+    + '<button class="acc" data-acc="♯" title="Sharp" aria-label="sharp">♯</button><span class="sep"></span>'
+    + '<button data-clear title="No name on this note" aria-label="No name">' + icon("M6 6l12 12M18 6L6 18") + "</button>"
+    + (edited ? '<button data-restore title="Back to the original name" aria-label="Original">' + icon("M4 12a8 8 0 1 0 2.5-5.8M4 4v5h5") + "</button>" : "")
+    + '<button class="ok" data-ok title="Save (Enter). Tab: next name, Esc: cancel" aria-label="Save">' + icon("M5 12l5 5 9-10") + "</button>";
+  at.pg.append(field, hint);
+  // to the right of the name, or under it when there is no room
+  const pw = at.pg.clientWidth, fw = field.offsetWidth, hw = hint.offsetWidth, hh = hint.offsetHeight;
+  if (at.x - 3 + fw + 8 + hw <= pw) {
+    hint.style.left = at.x - 3 + fw + 8 + "px";
+    hint.style.top = at.y + at.h / 2 - hh / 2 + "px";
+  } else {
+    hint.style.left = Math.max(4, Math.min(at.x - 3, pw - hw - 4)) + "px";
+    hint.style.top = at.y + at.h / 2 + h / 2 + 6 + "px";
+  }
+  marks();
+  const hitEl = at.pg.querySelector(`.hit[data-i="${i}"]`);
+  if (hitEl) hitEl.classList.add("on");
+  field.focus({ preventScroll: true }); field.select();
+  field.scrollIntoView({ block: "nearest", behavior: "smooth" });
+}
+
+function closeEdit(save) {
+  if (!editing) return;
+  const { p, i, orig, uncertain } = editing, text = tidy(field.value);
+  editing = null;
+  field.remove(); hint.remove();
+  view.querySelectorAll(".hit.on").forEach((h) => h.classList.remove("on"));
+  if (save && (text !== orig || uncertain)) setEdit(p, i, text);
+}
+
+function setEdit(p, i, text) {
+  const s = active;
+  if (text === null) {
+    if (s.edits[p]) { delete s.edits[p][i]; if (!Object.keys(s.edits[p]).length) delete s.edits[p]; }
+  } else {
+    (s.edits[p] = s.edits[p] || {})[i] = text;
+    // show the new name straight away; the redrawn page replaces it a moment later
+    const at = spot(p, i), chip = document.createElement("span");
+    chip.className = "pending"; chip.textContent = text;
+    Object.assign(chip.style, { left: at.x + "px", top: at.y + "px", height: at.h + "px", minWidth: at.w + "px",
+                                fontSize: at.fs + "px", lineHeight: at.h + "px", color: ink() });
+    at.pg.appendChild(chip);
+  }
+  update(); pump();
+}
+
+// the label after (or before) this one, across pages
+function neighbour(p, i, d) {
+  const all = active.result.labels.pages;
+  for (i += d; p >= 0 && p < all.length; p += d, i = d > 0 ? 0 : (all[p + d] || []).length - 1) {
+    if (i >= 0 && i < all[p].length) return [p, i];
+  }
+  return null;
+}
+
+const split = (t) => { const m = tidy(t).match(/^(.*?)([♯♭]*)$/); return [m[1], m[2]]; };
+
+// light up the buttons that match what is typed
+function marks() {
+  const [base, acc] = split(field.value);
+  hint.querySelectorAll("[data-name]").forEach((b) => b.classList.toggle("on", b.dataset.name.toLowerCase() === base.toLowerCase()));
+  hint.querySelectorAll("[data-acc]").forEach((b) => b.classList.toggle("on", base !== "" && b.dataset.acc === acc));
+}
+
+field.addEventListener("input", () => { sizeField(); marks(); });
+field.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") { e.preventDefault(); closeEdit(true); }
+  else if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); closeEdit(false); }
+  else if (e.key === "Tab") {
+    e.preventDefault();
+    const n = neighbour(editing.p, editing.i, e.shiftKey ? -1 : 1);
+    closeEdit(true);
+    if (n) startEdit(...n);
+  }
+});
+field.addEventListener("blur", () => closeEdit(true));
+hint.addEventListener("mousedown", (e) => {
+  e.preventDefault(); // keep the field focused
+  const b = e.target.closest("button");
+  if (!b || !editing) return;
+  const [base, acc] = split(field.value);
+  if ("name" in b.dataset) field.value = b.dataset.name + acc;
+  else if ("acc" in b.dataset) field.value = (base || NAMES[opts.style][0]) + b.dataset.acc;
+  else if ("clear" in b.dataset) { field.value = ""; return closeEdit(true); }
+  else if ("ok" in b.dataset) return closeEdit(true);
+  else if ("restore" in b.dataset) { const { p, i } = editing; editing = null; field.remove(); hint.remove(); return setEdit(p, i, null); }
+  sizeField(); marks();
+});
+
+view.addEventListener("click", (e) => {
+  if (!active || !active.result) return;
+  const h = e.target.closest(".hit"), lg = e.target.closest(".legend-hit");
+  if (h) startEdit(Number(h.closest(".pg").dataset.p), Number(h.dataset.i));
+  else if (lg) { active.legend = false; update(); pump(); }
+});
+$("status").addEventListener("click", (e) => {
+  if (e.target.closest(".relegend") && active) { active.legend = true; update(); pump(); }
+});
+
 window.addEventListener("keydown", (e) => {
-  if (!pages.length || e.target.closest("input, button, #drop")) return;
+  if (e.target.closest("input, select, #drop, .cpop") || e.ctrlKey || e.metaKey || e.altKey) return;
+  if (e.key === "Escape") { if (screen === "score") goHome(); return; }
+  if (!pages.length || e.target.closest("button")) return;
   if (e.key === "ArrowRight" || e.key === "PageDown") { e.preventDefault(); go(1); }
   if (e.key === "ArrowLeft" || e.key === "PageUp") { e.preventDefault(); go(-1); }
 });
 
-function status(html, err) { $("status").innerHTML = html; $("status").classList.toggle("err", !!err); }
-
-let mode = "exact"; // switches to "omr" once a file turns out to be a scan
-
-async function load(file) {
-  if (!file) return;
-  pdf = await file.arrayBuffer(); name = file.name; mode = "exact";
-  $("fname").textContent = name;
-  run();
-}
-
-async function run() {
-  if (!pdf) return;
-  const ticket = ++busy;
-  status(mode === "omr"
-    ? '<span class="spinner"></span>This is a scanned score: reading it with the local OMR model (about 25 s per page)…'
-    : '<span class="spinner"></span>Reading notes…');
-  const ext = (name.match(/\.(\w+)$/) || [, "pdf"])[1].toLowerCase();
-  const q = new URLSearchParams({ ...opts, mode, ext });
-  let res;
-  try {
-    res = await fetch("/annotate?" + q, { method: "POST", body: pdf, headers: { "Content-Type": "application/octet-stream" } });
-  } catch (e) {
-    return status("The app server is not running. Start it with <code>python app.py</code>.", true);
-  }
-  if (ticket !== busy) return; // a newer request superseded this one
-  if (!res.ok) {
-    const j = await res.json().catch(() => ({}));
-    if (j.scanned) { mode = "omr"; return run(); }
-    $("download").setAttribute("aria-disabled", "true");
-    return status("Could not label this file: " + (j.error || res.statusText), true);
-  }
-  const blob = await res.blob();
-  if (url) URL.revokeObjectURL(url);
-  url = URL.createObjectURL(blob);
-  show(res.headers.get("X-Id"), res.headers.get("X-Pages"));
-  const dl = $("download");
-  dl.href = url; dl.download = name.replace(/\.pdf$/i, "") + "_note_names.pdf"; dl.setAttribute("aria-disabled", "false");
-  const n = Number(res.headers.get("X-Notes")).toLocaleString();
-  if (res.headers.get("X-Mode") === "omr") {
-    const guesses = Number(res.headers.get("X-Notes")) - Number(res.headers.get("X-Confirmed"));
-    status(`${n} notes labelled from the scan. ` + (guesses
-      ? `<b style="color:#ff9a3d">${guesses} marked orange</b>: not sure, please check those.`
-      : "No uncertain notes.") + " A few notes may be missing entirely.");
-  } else {
-    const unsure = Number(res.headers.get("X-Notes")) - Number(res.headers.get("X-Confirmed"));
-    status(`${n} notes labelled, read exactly from the PDF.` + (unsure
-      ? ` <b style="color:#ff9a3d">${unsure} marked orange</b>: this score has no barlines there, so it is unclear whether an earlier accidental still applies.`
-      : ""));
-  }
-}
+update();
 </script>
 </body>
 </html>

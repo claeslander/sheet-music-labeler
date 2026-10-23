@@ -668,21 +668,31 @@ def read_notes(src, progress=print):
     return pages
 
 
-def annotate(src, dst, style="letters", color="red", fontsize=5.4, progress=print):
+def annotate(src, dst, style="letters", color="red", fontsize=5.4, progress=print, edits=None, labels=None, legend=True):
+    """Like note_names.annotate, but returns (notes, notes not marked orange)."""
     names = nn.SOLFEGE if style == "solfege" else nn.LETTERS
-    rgb = nn.COLORS.get(color, nn.COLORS["red"])
+    rgb = nn.color_rgb(color)
+    edits = edits or {}
     pages = read_notes(src, progress)
     doc = open_as_pdf(src)
+    confirmed = 0
     for page, notes in zip(doc, pages):
         for n in notes:  # label size follows the staff size of the scan
             n["fs"] = fontsize / 5.0 * n["unit"]
+        boxes = []
         if notes:
-            nn.draw_labels(page, nn.layout(notes, [], fontsize, names), rgb)
+            labelled, changed = nn.layout(notes, [], fontsize, names), edits.get(page.number, {})
+            boxes = nn.draw_labels(page, labelled, rgb, changed)
+            confirmed += nn.checked(labelled, changed)
+        if labels is not None:
+            labels.setdefault("pages", []).append(nn.label_boxes(page, boxes))
     total = sum(len(p) for p in pages)
     if total == 0:
         raise nn.UnsupportedPDF("no notes recognised")
-    unsure = sum(n["uncertain"] for p in pages for n in p)
-    nn.draw_legend(doc[0], unsure)
+    unsure = sum(n["uncertain"] for p in pages for n in p) - confirmed
+    box = nn.draw_legend(doc[0], unsure) if unsure and legend else None
+    if labels is not None:
+        labels["legend"] = box and nn.fraction(doc[0], box)
     doc.save(dst, garbage=3, deflate=True)
     return total, total - unsure
 
@@ -692,7 +702,7 @@ def main():
     ap.add_argument("input", type=Path)
     ap.add_argument("output", type=Path, nargs="?")
     ap.add_argument("--style", choices=["letters", "solfege"], default="letters")
-    ap.add_argument("--color", choices=list(nn.COLORS), default="red")
+    ap.add_argument("--color", type=nn.color_arg, default="red", help="red, blue, black or a hex colour like #1a7f37")
     ap.add_argument("--size", type=float, default=5.4, help="label size relative to a 5 pt staff space")
     a = ap.parse_args()
     out = a.output or a.input.with_name(a.input.stem + "_note_names_omr.pdf")
